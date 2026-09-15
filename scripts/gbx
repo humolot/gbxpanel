@@ -20,6 +20,7 @@
 #  gbx unlock-ip             clear the IP allow list
 #  gbx doctor                check services, permissions and the login page
 #  gbx fpm                   (re)create the dedicated gbxpanel-fpm service
+#  gbx terminal [on|off|status|restart]  real-time web terminal service
 #  gbx fix | update | logs | vhost | uninstall
 #
 set -uo pipefail
@@ -36,6 +37,8 @@ FPM_BIN="/usr/sbin/php-fpm8.4"
 FPM_DIR="$GBX_ROOT/fpm"
 FPM_SOCK="/run/gbxpanel/php-fpm.sock"
 FPM_UNIT="/etc/systemd/system/gbxpanel-fpm.service"
+TERM_BIN="$GBX_ROOT/bin/gbx-terminal"
+TERM_UNIT="/etc/systemd/system/gbxpanel-terminal.service"
 GBX_REPO="${GBX_REPO:-https://github.com/humolot/gbxpanel}"
 GBX_BRANCH="${GBX_BRANCH:-main}"
 
@@ -169,6 +172,53 @@ EOF
     die "PHP-FPM socket ${FPM_SOCK} was not created"
 }
 
+terminal_port() { local p; p="$(env_get GBX_TERMINAL_PORT)"; echo "${p:-17878}"; }
+
+# Real-time web terminal: a Python 3 daemon (standard library only) that serves PTY sessions
+# over WebSocket on 127.0.0.1. Apache proxies /gbx-terminal/ to it; sessions require a
+# single-use token signed by the panel with APP_KEY.
+ensure_terminal_service() {
+    local port
+    command -v python3 >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y python3 >/dev/null 2>&1 || die "python3 is required"
+    if [ ! -f "$TERM_BIN" ]; then
+        local raw="${GBX_REPO%/}"
+        raw="${raw/github.com/raw.githubusercontent.com}/${GBX_BRANCH}/scripts/gbx-terminal"
+        curl -fsSL "$raw" -o "$TERM_BIN" || { rm -f "$TERM_BIN"; die "$TERM_BIN not found and could not be downloaded (run: gbx update)"; }
+    fi
+    chmod 700 "$TERM_BIN"
+    port="$(terminal_port)"
+    env_set GBX_TERMINAL_PORT "$port"
+    a2enmod -q proxy proxy_http proxy_wstunnel >/dev/null 2>&1
+
+    cat >"$TERM_UNIT" <<EOF
+[Unit]
+Description=GBX Panel web terminal
+Documentation=https://github.com/humolot/gbxpanel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 ${TERM_BIN} --host 127.0.0.1 --port ${port} --env ${ENV_FILE}
+WorkingDirectory=/root
+Environment=HOME=/root LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable gbxpanel-terminal >/dev/null 2>&1
+    systemctl restart gbxpanel-terminal || { journalctl -u gbxpanel-terminal -n 20 --no-pager; die "gbxpanel-terminal failed to start"; }
+    for _ in $(seq 1 20); do
+        curl -fs --max-time 2 "http://127.0.0.1:${port}/health" >/dev/null 2>&1 && return 0
+        sleep 0.5
+    done
+    journalctl -u gbxpanel-terminal -n 20 --no-pager
+    die "gbxpanel-terminal is not answering on 127.0.0.1:${port}"
+}
+
 # Generate the panel virtual host from .env (single source of truth).
 write_vhost() {
     local port domain ssl cert key ssl_block=""
@@ -176,6 +226,7 @@ write_vhost() {
     cert="$(env_get GBX_SSL_CERT)"; key="$(env_get GBX_SSL_KEY)"
     [ -n "$port" ] || die "GBX_PORT is not set in $ENV_FILE"
     [ -f "$FPM_UNIT" ] || ensure_panel_fpm
+    a2enmod -q proxy proxy_http proxy_wstunnel >/dev/null 2>&1
 
     if is_true "$ssl"; then
         if [ -z "$cert" ] || [ ! -f "$cert" ] || [ ! -f "$key" ]; then
@@ -208,6 +259,9 @@ ${ssl_block}
         AllowOverride All
         Require all granted
     </Directory>
+
+    # real-time terminal (gbxpanel-terminal); sessions are authorized by single-use tokens
+    ProxyPass /gbx-terminal/ ws://127.0.0.1:$(terminal_port)/ timeout=86400 keepalive=On
 
     <Proxy "unix:${FPM_SOCK}|fcgi://gbxpanel">
         ProxySet timeout=3600
@@ -474,9 +528,11 @@ cmd_update() {
     chown -R "$GBX_USER:$GBX_USER" "$PANEL_DIR"
     (cd "$PANEL_DIR" && runuser -u "$GBX_USER" -- env HOME="$GBX_ROOT" COMPOSER_HOME="$GBX_ROOT/.composer" "$PHP_BIN" /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --no-progress) || die "composer install failed"
     artisan migrate --force
+    install -m 700 "$(dirname "$src")/scripts/gbx-terminal" "$TERM_BIN"
     rm -rf "$tmp"
     cmd_fix >/dev/null
     ensure_panel_fpm
+    ensure_terminal_service
     write_vhost
     cmd_restart
     okay "GBX Panel updated."
@@ -489,12 +545,34 @@ cmd_logs() {
     for log in php-error.log php-fpm.log apache-error.log worker.log; do
         echo -e "${D}== $GBX_ROOT/logs/${log} ==${N}"; tail -n 25 "$GBX_ROOT/logs/${log}" 2>/dev/null
     done
+    echo -e "${D}== journalctl -u gbxpanel-terminal ==${N}"; journalctl -u gbxpanel-terminal -n 15 --no-pager 2>/dev/null
 }
 
 cmd_fpm() {
     ensure_panel_fpm
     write_vhost
     okay "gbxpanel-fpm is running on ${FPM_SOCK}."
+}
+
+cmd_terminal() {
+    case "${1:-on}" in
+        on|start|enable)
+            ensure_terminal_service
+            write_vhost
+            okay "Real-time terminal is running on 127.0.0.1:$(terminal_port) (proxied at /gbx-terminal/)."
+            ;;
+        off|stop|disable)
+            systemctl disable --now gbxpanel-terminal >/dev/null 2>&1
+            note "Real-time terminal stopped. The Terminal page falls back to command mode."
+            ;;
+        restart)
+            systemctl restart gbxpanel-terminal && okay "Real-time terminal restarted (open sessions were closed)."
+            ;;
+        status)
+            systemctl --no-pager status gbxpanel-terminal | head -12
+            ;;
+        *) die "usage: gbx terminal [on|off|status|restart]" ;;
+    esac
 }
 
 # Check the pieces the panel needs and print the first problem found for each.
@@ -515,6 +593,9 @@ cmd_doctor() {
     for dir in storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs bootstrap/cache database; do
         check "${dir} writable by ${GBX_USER}" "runuser -u $GBX_USER -- test -w \"$PANEL_DIR/$dir\"" "(run: gbx fix)"
     done
+    check "gbxpanel-terminal running" "systemctl is-active --quiet gbxpanel-terminal" "(run: gbx terminal)"
+    check "terminal daemon answers on 127.0.0.1:$(terminal_port)" "curl -fs --max-time 3 http://127.0.0.1:$(terminal_port)/health" "(gbx terminal status)"
+    check "apache proxy_wstunnel enabled" "apache2ctl -M 2>/dev/null | grep -q proxy_wstunnel" "(a2enmod proxy_wstunnel)"
     check "sudo available to ${GBX_USER}" "runuser -u $GBX_USER -- sudo -n true" "(/etc/sudoers.d/gbxpanel)"
     check "artisan boots" "artisan about --only=environment" "(gbx logs)"
     probe="${entry:+/$entry}"
@@ -557,6 +638,8 @@ run_option() {
         22) cmd_logs ;;
         23) cmd_uninstall ;;
         24) cmd_doctor ;;
+        25) cmd_terminal on ;;
+        26) cmd_terminal off ;;
         0|q|"") exit 0 ;;
         *) echo "Invalid option: $1" ;;
     esac
@@ -580,11 +663,13 @@ menu() {
     echo "   (11) Disable security entrance    (22) View error logs"
     echo "                                     (23) Uninstall panel"
     echo "                                     (24) Diagnose problems"
+    echo "                                     (25) Enable real-time terminal"
+    echo "                                     (26) Disable real-time terminal"
     echo "   (0)  Exit"
     echo -e "${W}${B}  ==============================================================${N}"
     echo
     local choice
-    choice="$(ask "  Enter an option [0-24]: ")"
+    choice="$(ask "  Enter an option [0-26]: ")"
     echo
     run_option "$choice"
 }
@@ -605,6 +690,7 @@ case "${1:-}" in
     fpm) cmd_fpm ;;
     fpm-service) ensure_panel_fpm; okay "gbxpanel-fpm is running on ${FPM_SOCK}." ;;
     doctor) cmd_doctor ;;
-    -h|--help|help) sed -n '3,27p' "$0" ;;
+    terminal) cmd_terminal "${2:-on}" ;;
+    -h|--help|help) sed -n '3,28p' "$0" ;;
     *) die "unknown command: $1 (see gbx help)" ;;
 esac

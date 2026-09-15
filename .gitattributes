@@ -5,3 +5,4 @@ scripts/gbx text eol=lf
 *.jpg binary
 *.woff binary
 *.woff2 binary
+scripts/gbx-terminal text eol=lf

@@ -1,0 +1,524 @@
+#!/usr/bin/env python3
+"""
+gbx-terminal - real-time web terminal daemon for GBX Panel.
+
+Serves WebSocket sessions on 127.0.0.1 only. Apache forwards /gbx-terminal/ to it
+(mod_proxy_wstunnel). Each session is a login shell on a pseudo terminal.
+
+Authentication uses a single-use token issued by the panel (TerminalManager):
+
+    token   = base64url(payload) "." base64url(HMAC-SHA256(APP_KEY, base64url(payload)))
+    payload = {"u": user id, "n": username, "e": expires (unix), "r": nonce, "ip": client ip}
+
+Protocol (client -> server, text frames with JSON):
+    {"t": "i", "d": "<input>"}          keyboard input
+    {"t": "r", "c": cols, "r": rows}    resize
+    {"t": "k"}                          keepalive
+Server -> client: binary frames with raw terminal output; close frame when the shell exits.
+
+Only the Python 3 standard library is used.
+"""
+
+import argparse
+import asyncio
+import base64
+import hashlib
+import hmac
+import json
+import os
+import signal
+import struct
+import sys
+import time
+from urllib.parse import parse_qs, urlsplit
+
+WS_GUID = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+MAX_HEADER = 16 * 1024
+MAX_FRAME = 1024 * 1024
+READ_CHUNK = 65536
+
+OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG = 0x0, 0x1, 0x2, 0x8, 0x9, 0xA
+
+
+def log(msg):
+    sys.stderr.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    sys.stderr.flush()
+
+
+def b64url_decode(data):
+    data += "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data.encode("ascii"))
+
+
+def b64url_encode(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+# ---------------------------------------------------------------------------- auth
+class KeyStore:
+    """Reads APP_KEY from the panel .env and reloads it when the file changes."""
+
+    def __init__(self, env_file, key=None):
+        self.env_file = env_file
+        self.static = key
+        self.mtime = None
+        self.key = None
+
+    def get(self):
+        if self.static:
+            return self.static
+        try:
+            mtime = os.stat(self.env_file).st_mtime
+        except OSError:
+            return self.key
+        if mtime != self.mtime:
+            self.mtime = mtime
+            self.key = self._read()
+        return self.key
+
+    def _read(self):
+        try:
+            with open(self.env_file, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("APP_KEY="):
+                        value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if value.startswith("base64:"):
+                            return base64.b64decode(value[7:])
+                        return value.encode("utf-8") if value else None
+        except OSError as exc:
+            log("cannot read %s: %s" % (self.env_file, exc))
+        return None
+
+
+class TokenVerifier:
+    def __init__(self, keys):
+        self.keys = keys
+        self.used = {}
+
+    def verify(self, token, client_ip):
+        key = self.keys.get()
+        if not key:
+            raise PermissionError("APP_KEY is not available")
+        try:
+            payload_b64, sig_b64 = token.split(".", 1)
+        except ValueError:
+            raise PermissionError("malformed token")
+
+        expected = hmac.new(key, payload_b64.encode("ascii"), hashlib.sha256).digest()
+        try:
+            signature = b64url_decode(sig_b64)
+            payload = json.loads(b64url_decode(payload_b64))
+        except (ValueError, UnicodeError):
+            raise PermissionError("malformed token")
+        if not hmac.compare_digest(expected, signature):
+            raise PermissionError("invalid signature")
+
+        now = time.time()
+        if not isinstance(payload, dict) or float(payload.get("e", 0)) < now:
+            raise PermissionError("token expired")
+
+        nonce = str(payload.get("r", ""))
+        self.used = {n: exp for n, exp in self.used.items() if exp >= now}
+        if not nonce or nonce in self.used:
+            raise PermissionError("token already used")
+
+        if payload.get("ip") and client_ip and payload["ip"] != client_ip:
+            raise PermissionError("client address mismatch")
+
+        self.used[nonce] = float(payload["e"])
+        return payload
+
+
+# ---------------------------------------------------------------------------- websocket
+class WebSocket:
+    def __init__(self, reader, writer):
+        self.reader = reader
+        self.writer = writer
+        self.closed = False
+
+    async def send(self, opcode, payload=b""):
+        if self.closed and opcode != OP_CLOSE:
+            return
+        header = bytearray([0x80 | opcode])
+        length = len(payload)
+        if length < 126:
+            header.append(length)
+        elif length < 65536:
+            header.append(126)
+            header += struct.pack("!H", length)
+        else:
+            header.append(127)
+            header += struct.pack("!Q", length)
+        self.writer.write(bytes(header) + payload)
+        await self.writer.drain()
+
+    async def close(self, code=1000, reason=""):
+        if self.closed:
+            return
+        try:
+            await self.send(OP_CLOSE, struct.pack("!H", code) + reason.encode("utf-8")[:120])
+        except (ConnectionError, OSError):
+            pass
+        self.closed = True
+
+    async def _frame(self):
+        head = await self.reader.readexactly(2)
+        fin = head[0] & 0x80
+        opcode = head[0] & 0x0F
+        masked = head[1] & 0x80
+        length = head[1] & 0x7F
+        if length == 126:
+            length = struct.unpack("!H", await self.reader.readexactly(2))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", await self.reader.readexactly(8))[0]
+        if not masked:
+            raise ValueError("client frames must be masked")
+        if length > MAX_FRAME:
+            raise ValueError("frame too large")
+        mask = await self.reader.readexactly(4)
+        data = await self.reader.readexactly(length)
+        if length:
+            data = bytes(b ^ mask[i % 4] for i, b in enumerate(data)) if length < 256 else _unmask(data, mask)
+        return fin, opcode, data
+
+    async def receive(self):
+        """Return (opcode, payload) for complete data messages; handles control frames."""
+        buffer, message_op = b"", None
+        while True:
+            fin, opcode, data = await self._frame()
+            if opcode == OP_PING:
+                await self.send(OP_PONG, data)
+                continue
+            if opcode == OP_PONG:
+                continue
+            if opcode == OP_CLOSE:
+                code = struct.unpack("!H", data[:2])[0] if len(data) >= 2 else 1000
+                await self.close(code if code in (1000, 1001) else 1000)
+                return OP_CLOSE, b""
+            if opcode in (OP_TEXT, OP_BINARY):
+                message_op, buffer = opcode, data
+            elif opcode == OP_CONT and message_op is not None:
+                buffer += data
+            else:
+                raise ValueError("unexpected frame")
+            if len(buffer) > MAX_FRAME:
+                raise ValueError("message too large")
+            if fin:
+                return message_op, buffer
+
+
+def _unmask(data, mask):
+    key = int.from_bytes((mask * (len(data) // 4 + 1))[: len(data)], "big")
+    return (int.from_bytes(data, "big") ^ key).to_bytes(len(data), "big")
+
+
+async def read_request(reader):
+    raw = await reader.readuntil(b"\r\n\r\n")
+    if len(raw) > MAX_HEADER:
+        raise ValueError("header too large")
+    lines = raw.decode("latin-1").split("\r\n")
+    method, target, _ = (lines[0].split(" ") + ["", "", ""])[:3]
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            name, value = line.split(":", 1)
+            headers[name.strip().lower()] = value.strip()
+    return method, target, headers
+
+
+async def http_response(writer, status, body):
+    data = body.encode("utf-8")
+    writer.write(
+        ("HTTP/1.1 %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % (status, len(data))).encode("ascii")
+        + data
+    )
+    try:
+        await writer.drain()
+    except (ConnectionError, OSError):
+        pass
+    writer.close()
+
+
+# ---------------------------------------------------------------------------- backends
+class PtySession:
+    """Login shell on a pseudo terminal."""
+
+    def __init__(self, shell, cwd, cols, rows):
+        import fcntl
+        import pty
+        import termios
+
+        self._fcntl, self._termios = fcntl, termios
+        pid, fd = pty.fork()
+        if pid == 0:
+            try:
+                os.chdir(cwd if os.path.isdir(cwd) else "/")
+            except OSError:
+                pass
+            env = {
+                "TERM": "xterm-256color",
+                "COLORTERM": "truecolor",
+                "LANG": os.environ.get("LANG", "C.UTF-8"),
+                "HOME": os.environ.get("HOME", "/root"),
+                "USER": "root",
+                "LOGNAME": "root",
+                "SHELL": shell,
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "GBX_TERMINAL": "1",
+            }
+            try:
+                os.execve(shell, [shell, "-l"], env)
+            finally:
+                os._exit(127)
+        self.pid, self.fd = pid, fd
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        self.resize(cols, rows)
+        self.pending = bytearray()
+
+    async def read(self, loop):
+        while True:
+            try:
+                data = os.read(self.fd, READ_CHUNK)
+                return data  # b"" means EOF
+            except BlockingIOError:
+                ready = loop.create_future()
+                loop.add_reader(self.fd, lambda: ready.done() or ready.set_result(None))
+                try:
+                    await ready
+                finally:
+                    loop.remove_reader(self.fd)
+            except OSError:
+                return b""  # EIO: the shell exited
+
+    async def write(self, loop, data):
+        self.pending += data
+        while self.pending:
+            try:
+                written = os.write(self.fd, self.pending)
+                del self.pending[:written]
+            except BlockingIOError:
+                ready = loop.create_future()
+                loop.add_writer(self.fd, lambda: ready.done() or ready.set_result(None))
+                try:
+                    await ready
+                finally:
+                    loop.remove_writer(self.fd)
+            except OSError:
+                self.pending.clear()
+                return
+
+    def resize(self, cols, rows):
+        cols, rows = max(10, min(int(cols), 500)), max(2, min(int(rows), 200))
+        try:
+            self._fcntl.ioctl(self.fd, self._termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        except OSError:
+            pass
+
+    async def close(self):
+        for sig in (signal.SIGHUP, signal.SIGTERM):
+            try:
+                os.kill(self.pid, sig)
+            except ProcessLookupError:
+                break
+        for _ in range(40):
+            try:
+                if os.waitpid(self.pid, os.WNOHANG)[0]:
+                    break
+            except ChildProcessError:
+                break
+            await asyncio.sleep(0.05)
+        else:
+            try:
+                os.kill(self.pid, signal.SIGKILL)
+                os.waitpid(self.pid, 0)
+            except (ProcessLookupError, ChildProcessError):
+                pass
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+
+
+class EchoSession:
+    """Test backend: echoes input back. Used by the test suite and on systems without pty."""
+
+    def __init__(self, shell, cwd, cols, rows):
+        self.queue = asyncio.Queue()
+        self.queue.put_nowait(b"echo backend ready\r\n")
+
+    async def read(self, loop):
+        return await self.queue.get()
+
+    async def write(self, loop, data):
+        if data == b"exit\r":
+            self.queue.put_nowait(b"")
+        else:
+            self.queue.put_nowait(data)
+
+    def resize(self, cols, rows):
+        self.queue.put_nowait(("[resize %dx%d]" % (int(cols), int(rows))).encode("ascii"))
+
+    async def close(self):
+        pass
+
+
+# ---------------------------------------------------------------------------- server
+class TerminalServer:
+    def __init__(self, args):
+        self.args = args
+        self.verifier = TokenVerifier(KeyStore(args.env, args.key.encode("utf-8") if args.key else None))
+        self.backend = EchoSession if args.backend == "echo" else PtySession
+        self.sessions = 0
+
+    async def handle(self, reader, writer):
+        peer = (writer.get_extra_info("peername") or ("?", 0))[0]
+        try:
+            method, target, headers = await asyncio.wait_for(read_request(reader), 10)
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, ValueError, ConnectionError):
+            writer.close()
+            return
+
+        url = urlsplit(target)
+        if url.path.rstrip("/").endswith("/health") and method == "GET":
+            await http_response(writer, "200 OK", "ok %d\n" % self.sessions)
+            return
+
+        if headers.get("upgrade", "").lower() != "websocket" or not headers.get("sec-websocket-key"):
+            await http_response(writer, "426 Upgrade Required", "websocket required\n")
+            return
+
+        forwarded = [p.strip() for p in headers.get("x-forwarded-for", "").split(",") if p.strip()]
+        client_ip = forwarded[-1] if forwarded else peer
+        token = (parse_qs(url.query).get("token") or [""])[0]
+        try:
+            claims = self.verifier.verify(token, client_ip)
+        except PermissionError as exc:
+            log("rejected %s: %s" % (client_ip, exc))
+            await http_response(writer, "403 Forbidden", "%s\n" % exc)
+            return
+
+        if self.sessions >= self.args.max_sessions:
+            await http_response(writer, "503 Service Unavailable", "too many sessions\n")
+            return
+
+        accept = base64.b64encode(hashlib.sha1(headers["sec-websocket-key"].encode("ascii") + WS_GUID).digest()).decode("ascii")
+        writer.write(
+            (
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Accept: %s\r\n\r\n" % accept
+            ).encode("ascii")
+        )
+        await writer.drain()
+
+        ws = WebSocket(reader, writer)
+        self.sessions += 1
+        started = time.time()
+        log("session opened for %s (user %s) from %s" % (claims.get("n"), claims.get("u"), client_ip))
+        try:
+            await self.run_session(ws, claims)
+        finally:
+            self.sessions -= 1
+            log("session closed for %s after %ds" % (claims.get("n"), time.time() - started))
+            try:
+                writer.close()
+            except Exception:
+                pass
+
+    async def run_session(self, ws, claims):
+        loop = asyncio.get_running_loop()
+        cols = int(claims.get("c", 120) or 120)
+        rows = int(claims.get("h", 32) or 32)
+        try:
+            session = self.backend(self.args.shell, self.args.cwd, cols, rows)
+        except Exception as exc:
+            log("cannot start shell: %s" % exc)
+            await ws.close(1011, "cannot start shell")
+            return
+
+        activity = {"at": time.time()}
+
+        async def pump_output():
+            while not ws.closed:
+                data = await session.read(loop)
+                if not data:
+                    await ws.close(1000, "shell exited")
+                    return
+                await ws.send(OP_BINARY, data)
+
+        async def pump_input():
+            while not ws.closed:
+                opcode, data = await ws.receive()
+                if opcode == OP_CLOSE:
+                    return
+                activity["at"] = time.time()
+                if opcode == OP_BINARY:
+                    await session.write(loop, data)
+                    continue
+                try:
+                    msg = json.loads(data.decode("utf-8"))
+                except (ValueError, UnicodeError):
+                    continue
+                kind = msg.get("t") if isinstance(msg, dict) else None
+                if kind == "i" and isinstance(msg.get("d"), str):
+                    await session.write(loop, msg["d"].encode("utf-8"))
+                elif kind == "r":
+                    try:
+                        session.resize(msg.get("c", 80), msg.get("r", 24))
+                    except (TypeError, ValueError):
+                        pass
+                elif kind == "k":
+                    await ws.send(OP_TEXT, b'{"t":"k"}')
+
+        async def watch_idle():
+            while not ws.closed:
+                await asyncio.sleep(15)
+                if self.args.idle and time.time() - activity["at"] > self.args.idle:
+                    await ws.close(4000, "idle timeout")
+                    return
+
+        tasks = [asyncio.ensure_future(t) for t in (pump_output(), pump_input(), watch_idle())]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await ws.close(1000, "closed")
+            await session.close()
+
+
+async def main_async(args):
+    server = TerminalServer(args)
+    srv = await asyncio.start_server(server.handle, args.host, args.port, limit=MAX_HEADER)
+    log("gbx-terminal listening on %s:%d (backend %s)" % (args.host, args.port, args.backend))
+    if args.ready_file:
+        with open(args.ready_file, "w") as fh:
+            fh.write("ready")
+    async with srv:
+        await srv.serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="GBX Panel web terminal daemon")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("GBX_TERMINAL_PORT", 17878)))
+    parser.add_argument("--env", default="/usr/local/gbxpanel/panel/.env", help="panel .env with APP_KEY")
+    parser.add_argument("--key", default=None, help="signing key (testing only)")
+    parser.add_argument("--shell", default="/bin/bash")
+    parser.add_argument("--cwd", default="/root")
+    parser.add_argument("--idle", type=int, default=3600, help="close idle sessions after N seconds (0 = never)")
+    parser.add_argument("--max-sessions", type=int, default=20)
+    parser.add_argument("--backend", choices=("pty", "echo"), default="pty")
+    parser.add_argument("--ready-file", default=None)
+    args = parser.parse_args()
+    if args.backend == "pty" and os.name != "posix":
+        parser.error("the pty backend requires Linux")
+    try:
+        asyncio.run(main_async(args))
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

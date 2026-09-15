@@ -179,7 +179,7 @@ START_TS=$(date +%s)
 step "Updating package lists and installing base packages"
 export DEBIAN_FRONTEND=noninteractive
 run apt-get update -y
-apt_install ca-certificates curl wget unzip zip tar git rsync gnupg lsb-release openssl sqlite3 acl \
+apt_install ca-certificates curl wget unzip zip tar git rsync gnupg lsb-release openssl sqlite3 acl python3 \
     cron supervisor ufw sudo software-properties-common apt-transport-https logrotate iproute2 procps
 systemctl enable --now cron >>"$LOG_FILE" 2>&1 || true
 systemctl enable --now supervisor >>"$LOG_FILE" 2>&1 || true
@@ -276,6 +276,7 @@ run rsync -a --delete \
     --exclude='storage/framework/sessions/*' --exclude='storage/framework/cache/*' --exclude='node_modules' --exclude='.git' \
     "$SRC_DIR/panel/" "$PANEL_DIR/"
 install -m 755 "$SRC_DIR/scripts/gbx" "$GBX_ROOT/bin/gbx"
+install -m 700 "$SRC_DIR/scripts/gbx-terminal" "$GBX_ROOT/bin/gbx-terminal"
 [ -f "$SRC_DIR/uninstall.sh" ] && install -m 700 "$SRC_DIR/uninstall.sh" "$GBX_ROOT/bin/uninstall.sh"
 ln -sf "$GBX_ROOT/bin/gbx" /usr/bin/gbx
 [ -n "$TMP_SRC" ] && rm -rf "$TMP_SRC"
@@ -422,6 +423,11 @@ if [ -z "$(env_value GBX_SSL_CERT)" ] || [ ! -f "$(env_value GBX_SSL_CERT)" ]; t
     env_put GBX_SSL_KEY "$GBX_ROOT/ssl/panel.key"
 fi
 "$GBX_ROOT/bin/gbx" vhost >>"$LOG_FILE" 2>&1 || fail "could not generate the panel virtual host (see ${LOG_FILE})"
+if "$GBX_ROOT/bin/gbx" terminal on >>"$LOG_FILE" 2>&1; then
+    ok "real-time terminal service started (gbxpanel-terminal)"
+else
+    warn "real-time terminal did not start; the Terminal page uses command mode (retry with: gbx terminal)"
+fi
 run systemctl restart apache2
 SCHEME="https"; [ "$(env_value GBX_SSL)" = "false" ] && SCHEME="http"
 PANEL_HOST="$(env_value GBX_DOMAIN)"

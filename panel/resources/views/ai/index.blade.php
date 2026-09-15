@@ -19,6 +19,28 @@
     .ai-attach-preview img { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--gbx-border-strong); }
     .ai-attach-preview button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: var(--gbx-danger); color: #fff; font-size: .6rem; line-height: 1; padding: 0; }
     .ai-meta { font-size: .68rem; color: var(--gbx-muted); margin-top: .35rem; }
+    .ai-msg .bubble h1, .ai-msg .bubble h2, .ai-msg .bubble h3, .ai-msg .bubble h4, .ai-msg .bubble h5, .ai-msg .bubble h6 { font-weight: 650; color: #fff; margin: 1rem 0 .5rem; line-height: 1.35; }
+    .ai-msg .bubble h1 { font-size: 1.05rem; }
+    .ai-msg .bubble h2 { font-size: .98rem; }
+    .ai-msg .bubble h3, .ai-msg .bubble h4, .ai-msg .bubble h5, .ai-msg .bubble h6 { font-size: .9rem; }
+    .ai-msg .bubble > :first-child { margin-top: 0; }
+    .ai-msg .bubble > :last-child { margin-bottom: 0; }
+    .ai-msg .bubble p { margin: 0 0 .6rem; }
+    .ai-msg .bubble ul, .ai-msg .bubble ol { padding-left: 1.25rem; margin: 0 0 .6rem; }
+    .ai-msg .bubble li { margin: .15rem 0; }
+    .ai-msg .bubble li > ul, .ai-msg .bubble li > ol { margin: .2rem 0; }
+    .ai-msg .bubble hr { border: 0; border-top: 1px solid var(--gbx-border); opacity: 1; margin: .9rem 0; }
+    .ai-msg .bubble blockquote { border-left: 3px solid var(--gbx-border-strong); margin: .6rem 0; padding: .2rem .85rem; color: var(--gbx-text-2); }
+    .ai-msg .bubble a { color: var(--gbx-info); text-decoration: underline; text-underline-offset: 2px; }
+    .ai-msg .bubble strong { color: #fff; font-weight: 600; }
+    .ai-msg .bubble pre[data-code] { padding-top: 2rem; }
+    .ai-msg .bubble pre .code-lang { position: absolute; top: .45rem; left: .85rem; font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gbx-muted); font-family: var(--gbx-font); }
+    .ai-msg .bubble pre code { background: transparent; padding: 0; color: #d4d8dd; font-size: .78rem; }
+    .ai-table-wrap { margin: .6rem 0 .8rem; border: 1px solid var(--gbx-border); border-radius: 8px; }
+    .ai-table { margin: 0; font-size: .8rem; }
+    .ai-table > thead th { background: var(--gbx-surface-3); color: var(--gbx-text-2); text-transform: none; letter-spacing: 0; font-size: .76rem; padding: .5rem .75rem; }
+    .ai-table > tbody td { padding: .45rem .75rem; vertical-align: top; }
+    .ai-table > tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .015); }
 </style>
 @endpush
 
@@ -79,6 +101,11 @@
     @endif
 @endsection
 
+@push('vendor')
+    <script src="{{ asset('assets/vendor/marked/marked.min.js') }}"></script>
+    <script src="{{ asset('assets/vendor/dompurify/purify.min.js') }}"></script>
+@endpush
+
 @push('scripts')
 <script>
 $(function () {
@@ -97,30 +124,37 @@ $(function () {
         '</div></div></div>';
 
     /* -------------------------------------------------------------- markdown */
+    // Markdown -> sanitized HTML (marked + DOMPurify). Emojis and pictographs are removed
+    // so answers keep the panel's professional, icon-font based look.
+    var cp = String.fromCodePoint;
+    var EMOJI = new RegExp('[' + cp(0x1F000) + '-' + cp(0x1FAFF) + cp(0x2600) + '-' + cp(0x27BF) + cp(0x2B00) + '-' + cp(0x2BFF) + cp(0xFE0F) + cp(0x200D) + cp(0x20E3) + ']', 'gu');
+    marked.setOptions({ gfm: true, breaks: false });
+
     function md(text) {
-        var blocks = [];
-        text = String(text || '').replace(/```(\w*)\n?([\s\S]*?)```/g, function (_, lang, code) {
-            blocks.push({ lang: lang, code: code.replace(/\n$/, '') });
-            return '\u0000' + (blocks.length - 1) + '\u0000';
+        var clean = String(text || '').replace(EMOJI, '').replace(/^([ \t]*#{1,6})[ \t]+/gm, '$1 ');
+        var html = DOMPurify.sanitize(marked.parse(clean), {
+            FORBID_TAGS: ['style', 'form', 'input', 'button', 'img', 'iframe', 'svg', 'math'],
+            FORBID_ATTR: ['style', 'id']
         });
-        var html = GBX.escape(text)
-            .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-            .replace(/^#{1,3} (.*)$/gm, '<h6 class="mt-3 mb-2">$1</h6>')
-            .replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>')
-            .replace(/^\s*\d+\. (.*)$/gm, '<li class="ol">$1</li>')
-            .replace(/(<li>.*<\/li>\n?)+/g, function (m) { return '<ul class="mb-2">' + m.replace(/\n/g, '') + '</ul>'; })
-            .replace(/(<li class="ol">.*<\/li>\n?)+/g, function (m) { return '<ol class="mb-2">' + m.replace(/\n/g, '') + '</ol>'; })
-            .replace(/\n{2,}/g, '</p><p>')
-            .replace(/\n/g, '<br>');
-        html = '<p>' + html + '</p>';
-        return html.replace(/\u0000(\d+)\u0000/g, function (_, i) {
-            var b = blocks[i], shell = /^(bash|sh|shell|console|)$/.test(b.lang);
-            return '</p><pre data-code="' + GBX.escape(b.code) + '"><div class="code-actions">' +
+        var $wrap = $('<div>').html(html);
+
+        $wrap.find('table').addClass('table table-sm ai-table').wrap('<div class="table-responsive ai-table-wrap"></div>');
+        $wrap.find('a').attr({ target: '_blank', rel: 'noopener noreferrer' });
+        $wrap.find('pre').each(function () {
+            var $pre = $(this), $code = $pre.find('code'), lang = '';
+            var match = String($code.attr('class') || '').match(/language-([\w+-]+)/);
+            if (match) lang = match[1];
+            var shell = /^(bash|sh|shell|console|zsh|)$/i.test(lang);
+            $code.removeAttr('class');
+            $pre.attr('data-code', $code.text().replace(/\n$/, ''));
+            $pre.prepend('<div class="code-actions">' +
                 '<button type="button" class="btn btn-sm btn-secondary py-0 px-2 code-copy" title="Copy"><i class="bi bi-clipboard"></i></button>' +
                 (shell && isAdmin ? '<button type="button" class="btn btn-sm btn-secondary py-0 px-2 code-term" title="Open in terminal"><i class="bi bi-terminal"></i></button>' : '') +
-                '</div><code class="bg-transparent p-0">' + GBX.escape(b.code) + '</code></pre><p>';
-        }).replace(/<p>(<br>)*<\/p>/g, '');
+                '</div>');
+            if (lang) $pre.prepend($('<span class="code-lang">').text(lang));
+        });
+
+        return $wrap.html();
     }
 
     function prettyResult(result) {

@@ -58,6 +58,14 @@ return [
         'timeout' => (int) env('GBX_CLAMD_TIMEOUT', 300),
     ],
 
+    // Real-time web terminal (scripts/gbx-terminal, proxied by Apache at /gbx-terminal/).
+    'terminal' => [
+        'port' => (int) env('GBX_TERMINAL_PORT', 17878),
+        // Browser WebSocket URL override; empty uses the same origin at /gbx-terminal/.
+        'url' => env('GBX_TERMINAL_URL', ''),
+        'token_ttl' => 60,
+    ],
+
     // User that owns website files and runs PHP-FPM pools for sites.
     'web_user' => env('GBX_WEB_USER', 'www-data'),
 

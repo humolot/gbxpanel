@@ -171,6 +171,7 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
     // Administrators only
     Route::middleware('panel.access:admin')->group(function () {
         Route::get('/terminal', [Controllers\TerminalController::class, 'index'])->name('terminal.index');
+        Route::post('/terminal/token', [Controllers\TerminalController::class, 'token'])->name('terminal.token');
         Route::post('/terminal/exec', [Controllers\TerminalController::class, 'exec'])->name('terminal.exec');
 
         Route::get('/accounts', [Controllers\AccountController::class, 'index'])->name('accounts.index');

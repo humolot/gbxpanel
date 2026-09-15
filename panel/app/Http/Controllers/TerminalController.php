@@ -5,21 +5,46 @@ namespace App\Http\Controllers;
 use App\Services\FileManager;
 use App\Services\Shell;
 use App\Services\SystemStats;
+use App\Services\TerminalManager;
 use Illuminate\Http\Request;
 
 /**
- * Command console: each command runs in a fresh root bash with the working
- * directory persisted in the session. Interactive programs are not supported.
+ * Web terminal. The primary mode is a real-time PTY session served by the gbx-terminal
+ * daemon over WebSocket (see TerminalManager). When the daemon is not running, the page
+ * falls back to command mode: each command runs in a fresh root bash with the working
+ * directory persisted in the session.
  */
 class TerminalController extends Controller
 {
     protected const INTERACTIVE = ['vim', 'vi', 'nano', 'top', 'htop', 'less', 'more', 'watch', 'mysql', 'ssh', 'ftp', 'sftp', 'man', 'tmux', 'screen', 'python', 'python3', 'node', 'php -a', 'mc', 'bash', 'sh'];
 
-    public function index(SystemStats $stats)
+    public function index(SystemStats $stats, TerminalManager $terminal)
     {
         return view('terminal.index', [
             'cwd' => session('terminal_cwd', '/root'),
             'hostname' => $stats->info()['hostname'],
+            'live' => $terminal->available(),
+            'wsUrl' => $terminal->url(),
+        ]);
+    }
+
+    /** Issue a single-use token for a real-time session. */
+    public function token(Request $request, TerminalManager $terminal)
+    {
+        $data = $request->validate([
+            'cols' => ['nullable', 'integer', 'min:10', 'max:500'],
+            'rows' => ['nullable', 'integer', 'min:2', 'max:200'],
+        ]);
+
+        if (! $terminal->available()) {
+            return $this->fail('The terminal service is not running. Start it on the server with: gbx terminal', 503);
+        }
+
+        $this->audit('terminal', 'Opened terminal session');
+
+        return $this->ok('ok', [
+            'token' => $terminal->token($request->user(), $request->ip(), (int) ($data['cols'] ?? 120), (int) ($data['rows'] ?? 32)),
+            'url' => $terminal->url(),
         ]);
     }
 

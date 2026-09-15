@@ -28,6 +28,8 @@ systemctl reload apache2 >/dev/null 2>&1
 
 systemctl disable --now gbxpanel-fpm >/dev/null 2>&1
 rm -f /etc/systemd/system/gbxpanel-fpm.service
+systemctl disable --now gbxpanel-terminal >/dev/null 2>&1
+rm -f /etc/systemd/system/gbxpanel-terminal.service
 systemctl daemon-reload >/dev/null 2>&1
 if [ -f "/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf" ]; then
     rm -f "/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf"
