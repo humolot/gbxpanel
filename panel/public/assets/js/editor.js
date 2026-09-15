@@ -6,6 +6,9 @@
     'use strict';
 
     var C = window.GBX_EDITOR, R = C.routes;
+    C.storeKey = C.storeKey || 'gbx.editor';
+    // client sub-panel: the explorer is limited to the document roots of the client's websites
+    var ROOTS = C.roots ? Object.keys(C.roots).map(function (d) { return { domain: d, path: C.roots[d] }; }) : null;
     var $app = $('#edApp'), $tree = $('#edTree'), $tabs = $('#edTabs'), $ctx = $('#edCtx');
     var isMobile = function () { return window.innerWidth < 768; };
 
@@ -26,7 +29,7 @@
         minimap: true, stickyScroll: true, bracketPairs: true, guides: true, ligatures: false, smoothScrolling: true,
         trimOnSave: false, finalNewline: false, restoreSession: true
     };
-    var savedSettings = store.get('gbx.editor.settings', null);
+    var savedSettings = store.get(C.storeKey + '.settings', null);
     var settings = $.extend({}, DEFAULTS, savedSettings || {});
     if (!savedSettings && isMobile()) { settings.minimap = false; settings.fontSize = 13; }
 
@@ -52,6 +55,8 @@
         return path.indexOf(root + '/') === 0 ? path.slice(root.length + 1) : path;
     }
     function isInside(path, dir) { return path === dir || path.indexOf((dir === '/' ? '' : dir) + '/') === 0; }
+    function siteOf(path) { return ROOTS ? ROOTS.filter(function (r) { return isInside(normalize(path), r.path); })[0] || null : null; }
+    function allowedRoot(path) { return !ROOTS || !!siteOf(path); }
     function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
     function debounce(fn, ms) { var t; return function () { var a = arguments, self = this; clearTimeout(t); t = setTimeout(function () { fn.apply(self, a); }, ms); }; }
     function timeNow() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -128,10 +133,10 @@
     /* ================================================================ state */
     var state = { root: C.root, tabs: [], active: null, selected: null, expanded: {} };
     var editor = null, monacoReady = false, pendingOpen = [];
-    var session = store.get('gbx.editor.session', null);
+    var session = store.get(C.storeKey + '.session', null);
     var query = new URLSearchParams(location.search);
 
-    if (!query.has('root') && !C.open && settings.restoreSession && session && session.root) {
+    if (!query.has('root') && !C.open && settings.restoreSession && session && session.root && allowedRoot(session.root)) {
         state.root = session.root;
     }
 
@@ -163,7 +168,7 @@
     $(window).on('blur resize', hideMenu);
 
     /* ================================================================ tree */
-    function expandedKey() { return 'gbx.editor.expanded:' + state.root; }
+    function expandedKey() { return C.storeKey + '.expanded:' + state.root; }
 
     function nodeFor(path) {
         return $tree.find('.tn').filter(function () { return $(this).data('path') === path; }).first();
@@ -410,7 +415,9 @@
         e.preventDefault();
         var sel = state.selected && nodeFor(state.selected), selDir = sel && sel.length ? (sel.data('type') === 'dir' ? sel.data('path') : dirname(sel.data('path'))) : state.root;
         switch ($(this).data('tree')) {
-            case 'up': setRoot(dirname(state.root)); break;
+            case 'up':
+                if (ROOTS && siteOf(state.root) && siteOf(state.root).path === state.root) { chooseRoot(); break; }
+                setRoot(dirname(state.root)); break;
             case 'refresh': renderTree(); break;
             case 'newFile': createItem(selDir, 'file'); break;
             case 'newFolder': createItem(selDir, 'dir'); break;
@@ -425,19 +432,29 @@
         }
     });
 
-    $('#edRoot').on('click', function () {
-        GBX.prompt('Open directory', state.root, '/www/wwwroot/example.com').then(function (r) { if (r.isConfirmed) setRoot(r.value); });
-    });
+    function chooseRoot() {
+        if (!ROOTS) {
+            return GBX.prompt('Open directory', state.root, '/www/wwwroot/example.com').then(function (r) { if (r.isConfirmed) setRoot(r.value); });
+        }
+        var options = {}, current = siteOf(state.root);
+        ROOTS.forEach(function (r) { options[r.path] = r.domain; });
+        Swal.fire({
+            title: 'Open website', input: 'select', inputOptions: options, inputValue: current ? current.path : ROOTS[0] && ROOTS[0].path,
+            showCancelButton: true, confirmButtonText: 'Open', buttonsStyling: false, reverseButtons: true,
+            customClass: { confirmButton: 'btn btn-primary', cancelButton: 'btn btn-outline-secondary me-2', input: 'form-select' }
+        }).then(function (r) { if (r.isConfirmed && r.value) setRoot(r.value); });
+    }
+    $('#edRoot').on('click', chooseRoot);
 
     /* ================================================================ search in files */
-    var searchOpts = $.extend({ case: false, word: false, regex: false }, store.get('gbx.editor.searchOpts', {}));
+    var searchOpts = $.extend({ case: false, word: false, regex: false }, store.get(C.storeKey + '.searchOpts', {}));
     var searchDir = null;
     $('.ed-opt').each(function () { $(this).toggleClass('on', !!searchOpts[$(this).data('opt')]); });
     $('.ed-opt').on('click', function () {
         var k = $(this).data('opt');
         searchOpts[k] = !searchOpts[k];
         $(this).toggleClass('on', searchOpts[k]);
-        store.set('gbx.editor.searchOpts', searchOpts);
+        store.set(C.storeKey + '.searchOpts', searchOpts);
     });
 
     function showSearch(dir) {
@@ -937,8 +954,8 @@
     /* ================================================================ palettes */
     var quick = { items: [], index: 0, mode: 'file', xhr: null };
 
-    function recent() { return store.get('gbx.editor.recent', []); }
-    function addRecent(path) { store.set('gbx.editor.recent', [path].concat(recent().filter(function (p) { return p !== path; })).slice(0, 30)); }
+    function recent() { return store.get(C.storeKey + '.recent', []); }
+    function addRecent(path) { store.set(C.storeKey + '.recent', [path].concat(recent().filter(function (p) { return p !== path; })).slice(0, 30)); }
 
     function openPalette(mode, placeholder) {
         quick.mode = mode;
@@ -1035,7 +1052,7 @@
     }
 
     function applySettings() {
-        store.set('gbx.editor.settings', settings);
+        store.set(C.storeKey + '.settings', settings);
         if (!monacoReady) return;
         editor.updateOptions(editorOptions());
     }
@@ -1088,7 +1105,7 @@
         var hidden = $app.hasClass('side-hidden');
         if (typeof show === 'boolean' && show === !hidden) return;
         $app.toggleClass('side-hidden', typeof show === 'boolean' ? !show : !hidden);
-        if (!isMobile()) store.set('gbx.editor.sidebar', !$app.hasClass('side-hidden'));
+        if (!isMobile()) store.set(C.storeKey + '.sidebar', !$app.hasClass('side-hidden'));
     }
 
     var commands = {
@@ -1140,7 +1157,7 @@
 
     /* ================================================================ resizer */
     (function () {
-        var w = store.get('gbx.editor.sideWidth', 280);
+        var w = store.get(C.storeKey + '.sideWidth', 280);
         $app[0].style.setProperty('--ed-side-w', w + 'px');
         $('#edResizer').on('mousedown', function (e) {
             e.preventDefault();
@@ -1151,7 +1168,7 @@
             }).on('mouseup.edr', function () {
                 $r.removeClass('dragging');
                 $(document).off('.edr');
-                store.set('gbx.editor.sideWidth', Math.round(w));
+                store.set(C.storeKey + '.sideWidth', Math.round(w));
             });
         });
     })();
@@ -1159,7 +1176,7 @@
     /* ================================================================ session */
     function persistSession() {
         if (!settings.restoreSession) return;
-        store.set('gbx.editor.session', { root: state.root, tabs: state.tabs.map(function (t) { return t.path; }).slice(0, 20), active: state.active ? state.active.path : null });
+        store.set(C.storeKey + '.session', { root: state.root, tabs: state.tabs.map(function (t) { return t.path; }).slice(0, 20), active: state.active ? state.active.path : null });
     }
 
     function syncUrl() {
@@ -1180,10 +1197,10 @@
     }
     window.GBX_EDITOR_API = {
         open: function (path, root) {
-            if (root && !state.tabs.length && root !== state.root) setRoot(root);
+            if (root && !state.tabs.length && root !== state.root && allowedRoot(root)) setRoot(root);
             openFile(path);
         },
-        setRoot: function (root) { if (normalize(root) !== state.root) setRoot(root); showExplorer(); toggleSidebar(true); },
+        setRoot: function (root) { if (normalize(root) !== state.root && allowedRoot(root)) setRoot(root); showExplorer(); toggleSidebar(true); },
         focus: function () {
             if (editor && state.active && state.active.model && !isMobile()) editor.focus(); else $tree.trigger('focus');
             if (editor) editor.layout();
@@ -1295,13 +1312,13 @@
 
     /* ================================================================ boot */
     var wasMobile = isMobile();
-    if (wasMobile || store.get('gbx.editor.sidebar', true) === false) $app.addClass('side-hidden');
+    if (wasMobile || store.get(C.storeKey + '.sidebar', true) === false) $app.addClass('side-hidden');
     // the explorer is an overlay on phones: hide it when shrinking, restore the saved state when growing
     $(window).on('resize', debounce(function () {
         var mobile = isMobile();
         if (mobile === wasMobile) return;
         wasMobile = mobile;
-        $app.toggleClass('side-hidden', mobile || store.get('gbx.editor.sidebar', true) === false);
+        $app.toggleClass('side-hidden', mobile || store.get(C.storeKey + '.sidebar', true) === false);
     }, 150));
 
     renderTree();

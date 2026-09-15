@@ -167,7 +167,7 @@
 <script src="{{ asset('assets/vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
 @stack('vendor')
 <script>
-    window.GBX = { routes: { tasks: @json(url('/client/tasks')), editor: null }, user: @json(['name' => $client->name, 'role' => 'client']) };
+    window.GBX = { routes: { tasks: @json(url('/client/tasks')), editor: @json(route('client.files.editor')) }, user: @json(['name' => $client->name, 'role' => 'client']) };
 </script>
 <script src="{{ asset('assets/js/gbx.js') }}?v={{ config('gbx.version') }}"></script>
 @foreach (['success', 'warning', 'error'] as $flash)

@@ -1,6 +1,15 @@
 @php
+    // shared by the administrator (files.*) and the client sub-panel (client.files.*, only the client's websites)
     $panelTitle = \App\Models\Setting::get('panel_title', 'GBX Panel');
-    $user = auth()->user();
+    $account ??= ['name' => auth()->user()->name, 'role' => auth()->user()->role];
+    $roots ??= null;
+    $filesUrl ??= route('files.index');
+    $storeKey ??= 'gbx.editor';
+    $routes ??= [
+        'list' => route('files.list'), 'open' => route('files.open'), 'write' => route('files.write'),
+        'search' => route('files.search'), 'create' => route('files.create'), 'rename' => route('files.rename'),
+        'del' => route('files.delete'), 'upload' => route('files.upload'), 'download' => route('files.download'),
+    ];
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
@@ -24,7 +33,7 @@
     {{-- ------------------------------------------------------------ toolbar --}}
     <header class="ed-toolbar">
         @unless ($embed)
-            <a href="{{ route('files.index', ['path' => $root]) }}" class="ed-brand" title="Back to Files">
+            <a href="{{ $filesUrl }}?path={{ urlencode($root) }}" class="ed-brand" title="Back to Files">
                 <span class="ed-logo"><i class="bi bi-code-slash"></i></span>
                 <span class="ed-brand-text">Code Editor</span>
             </a>
@@ -253,7 +262,7 @@
 <script src="{{ asset('assets/vendor/toastr/toastr.min.js') }}"></script>
 <script src="{{ asset('assets/vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
 <script>
-    window.GBX = { routes: {}, user: @json(['name' => $user->name, 'role' => $user->role]) };
+    window.GBX = { routes: {}, user: @json($account) };
     window.GBX_EDITOR = {
         root: @json($root),
         open: @json($open),
@@ -261,12 +270,10 @@
         embed: @json($embed),
         encodings: @json($encodings),
         vs: @json(asset('assets/vendor/monaco/vs')),
-        filesUrl: @json(route('files.index')),
-        routes: {
-            list: @json(route('files.list')), open: @json(route('files.open')), write: @json(route('files.write')),
-            search: @json(route('files.search')), create: @json(route('files.create')), rename: @json(route('files.rename')),
-            del: @json(route('files.delete')), upload: @json(route('files.upload')), download: @json(route('files.download'))
-        }
+        filesUrl: @json($filesUrl),
+        roots: @json($roots),
+        storeKey: @json($storeKey),
+        routes: @json($routes)
     };
 </script>
 <script src="{{ asset('assets/js/gbx.js') }}?v={{ config('gbx.version') }}"></script>

@@ -17,7 +17,7 @@ use App\Services\ShellResult;
  */
 class ClientFiles
 {
-    public const EDIT_MAX = 2097152;
+    public const EDIT_MAX = FileManager::EDITABLE_MAX;
 
     public function __construct(protected Client $client) {}
 
@@ -122,19 +122,21 @@ class ClientFiles
 
     /* =============================================================== reading */
 
-    /** @return list<array{name: string, type: string, size: int, mtime: int, perms: string, target: ?string}> */
+    /** @return list<array{name: string, path: string, type: string, size: int, mtime: int, perms: string, target: ?string}> */
     public function list(string $dir): array
     {
+        $shown = FileManager::normalize($dir);
         $dir = $this->resolve($dir);
+        $withPath = fn (array $items) => array_map(fn ($i) => ['name' => $i['name'], 'path' => rtrim($shown, '/').'/'.$i['name']] + $i, $items);
         if (Shell::simulating()) {
-            return [
+            return $withPath([
                 ['name' => 'wp-content', 'type' => 'dir', 'size' => 4096, 'mtime' => time() - 86400, 'perms' => '755', 'target' => null],
                 ['name' => 'uploads', 'type' => 'dir', 'size' => 4096, 'mtime' => time() - 7200, 'perms' => '755', 'target' => null],
                 ['name' => 'index.php', 'type' => 'file', 'size' => 405, 'mtime' => time() - 3600, 'perms' => '644', 'target' => null],
                 ['name' => 'wp-config.php', 'type' => 'file', 'size' => 3120, 'mtime' => time() - 600, 'perms' => '640', 'target' => null],
                 ['name' => '.htaccess', 'type' => 'file', 'size' => 523, 'mtime' => time() - 99000, 'perms' => '644', 'target' => null],
                 ['name' => 'backup.zip', 'type' => 'file', 'size' => 18234120, 'mtime' => time() - 400000, 'perms' => '644', 'target' => null],
-            ];
+            ]);
         }
         $out = $this->checked($this->run('find '.Shell::arg($dir)." -mindepth 1 -maxdepth 1 -printf '%y\\t%s\\t%T@\\t%m\\t%l\\t%f\\n' 2>/dev/null | head -n 5000", 30))->output;
         $items = [];
@@ -147,7 +149,80 @@ class ClientFiles
         }
         usort($items, fn ($a, $b) => [$a['type'] !== 'dir', strtolower($a['name'])] <=> [$b['type'] !== 'dir', strtolower($b['name'])]);
 
-        return $items;
+        return $withPath($items);
+    }
+
+    /** Size, modification time, mode and owner of a resolved path, read as the website user. */
+    protected function stat(string $path): ?array
+    {
+        $p = explode('|', trim($this->run('stat -c '.Shell::arg('%s|%Y|%a|%U:%G|%F').' -- '.Shell::arg($path), 10)->output));
+
+        return count($p) < 5 ? null : ['size' => (int) $p[0], 'mtime' => (int) $p[1], 'perms' => $p[2], 'owner' => $p[3], 'dir' => str_contains($p[4], 'directory')];
+    }
+
+    /** Open a text file for the code editor (same answer as the file manager of the administrator). */
+    public function open(string $path, ?string $encoding = null): array
+    {
+        $shown = FileManager::normalize($path);
+        $real = $this->resolve($path);
+        if (Shell::simulating()) {
+            return (new FileManager)->open($shown, $encoding);
+        }
+        $stat = $this->stat($real) ?? throw new \RuntimeException('File not found');
+        if ($stat['dir']) {
+            throw new \RuntimeException('This path is a folder.');
+        }
+        if ($stat['size'] > self::EDIT_MAX) {
+            throw new \RuntimeException('The file is too large to edit online (max 3 MB). Download it instead.');
+        }
+        $raw = $this->checked($this->run('head -c '.self::EDIT_MAX.' -- '.Shell::arg($real), 30))->output;
+        if (str_contains(substr($raw, 0, 8000), "\0")) {
+            throw new \RuntimeException('This is a binary file and cannot be edited as text.');
+        }
+        unset($stat['dir']);
+
+        return $stat + ['path' => $shown] + FileManager::decodeText($raw, $encoding);
+    }
+
+    /**
+     * Save editor content. A file changed on disk after it was opened is not overwritten unless forced.
+     *
+     * @return array{ok: bool, conflict?: bool, message?: string, mtime?: int, size?: int}
+     */
+    public function save(string $path, string $content, string $encoding = 'utf-8', ?int $expectedMtime = null, bool $force = false): array
+    {
+        $raw = FileManager::encodeText($content, $encoding);
+        $real = $this->resolveEntry($path);
+        if (Shell::simulating()) {
+            return (new FileManager)->save(FileManager::normalize($path), $content, $encoding, $expectedMtime, $force);
+        }
+        $current = $this->stat($real);
+        if (! $force && $expectedMtime && $current && $current['mtime'] !== $expectedMtime) {
+            return ['ok' => false, 'conflict' => true, 'message' => 'The file was changed on the server after you opened it.', 'mtime' => $current['mtime']];
+        }
+        $this->write($path, $raw);
+        $after = $this->stat($real);
+
+        return ['ok' => true, 'mtime' => $after['mtime'] ?? time(), 'size' => $after['size'] ?? strlen($raw)];
+    }
+
+    /** Search names or contents inside a website folder, as the website user (links are not followed). */
+    public function search(string $dir, string $query, array $options = []): array
+    {
+        $shown = FileManager::normalize($dir);
+        $real = $this->resolve($dir);
+        $result = (new FileManager)->search($real, $query, $options, fn (string $cmd, int $timeout) => $this->run($cmd, $timeout));
+        if ($real !== $shown) {
+            // report paths under the folder the client opened
+            foreach ($result['results'] as &$item) {
+                if (str_starts_with($item['path'], $real.'/')) {
+                    $item['path'] = $shown.substr($item['path'], strlen($real));
+                }
+            }
+            unset($item);
+        }
+
+        return $result;
     }
 
     public function read(string $path): string

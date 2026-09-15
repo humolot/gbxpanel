@@ -72,17 +72,100 @@ class ClientFileController extends ClientPanelController
         }
     }
 
+    /** Code editor of the administrator (Monaco, tree, tabs, search) bound to the client routes. */
+    public function editor(Request $request)
+    {
+        $files = $this->files();
+        $roots = $files->roots();
+        $root = FileManager::normalize((string) $request->query('root', reset($roots) ?: ''));
+        $open = $request->query('open') ? FileManager::normalize((string) $request->query('open')) : null;
+        if ($open && ! $request->query('root')) {
+            $root = dirname($open);
+        }
+        try {
+            $files->rootOf($root);
+        } catch (\InvalidArgumentException) {
+            $root = reset($roots) ?: '/';
+            $open = null;
+        }
+        $client = $this->client();
+
+        return view('files.editor', [
+            'root' => $root,
+            'open' => $open,
+            'encodings' => array_keys(FileManager::ENCODINGS),
+            'readOnly' => false,
+            'embed' => $request->boolean('embed'),
+            'account' => ['name' => $client->name, 'role' => 'client'],
+            'roots' => $roots,
+            'filesUrl' => route('client.files'),
+            'storeKey' => 'gbx.client'.$client->id.'.editor',
+            'routes' => [
+                'list' => route('client.files.list'), 'open' => route('client.files.open'), 'write' => route('client.files.write'),
+                'search' => route('client.files.search'), 'create' => route('client.files.create'), 'rename' => route('client.files.rename'),
+                'del' => route('client.files.delete'), 'upload' => route('client.files.upload'), 'download' => route('client.files.download'),
+            ],
+        ]);
+    }
+
+    public function open(Request $request)
+    {
+        $data = $request->validate(['path' => ['required', 'string', 'max:4096'], 'encoding' => ['nullable', 'string']]);
+        try {
+            return $this->ok('ok', $this->files()->open($data['path'], $data['encoding'] ?? null));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->fail($e->getMessage());
+        }
+    }
+
+    public function search(Request $request)
+    {
+        $data = $request->validate([
+            'dir' => ['required', 'string', 'max:4096'],
+            'query' => ['required', 'string', 'min:1', 'max:200'],
+            'mode' => ['nullable', 'in:content,name'],
+            'include' => ['nullable', 'string', 'max:200'],
+        ]);
+        try {
+            return $this->ok('ok', ['dir' => FileManager::normalize($data['dir'])] + $this->files()->search($data['dir'], $data['query'], [
+                'mode' => $data['mode'] ?? 'content',
+                'case' => $request->boolean('case'),
+                'word' => $request->boolean('word'),
+                'regex' => $request->boolean('regex'),
+                'include' => $data['include'] ?? '',
+                'skip_heavy' => $request->boolean('skip_heavy', true),
+            ]));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->fail($e->getMessage());
+        }
+    }
+
     public function write(Request $request)
     {
-        $data = $request->validate(['path' => ['required', 'string', 'max:4096'], 'content' => ['present', 'nullable', 'string']]);
+        $data = $request->validate([
+            'path' => ['required', 'string', 'max:4096'],
+            'content' => ['present', 'nullable', 'string'],
+            'encoding' => ['nullable', 'string'],
+            'mtime' => ['nullable', 'integer'],
+            'force' => ['nullable', 'boolean'],
+        ]);
         if ($error = $this->quotaBlock()) {
             return $error;
         }
         if (strlen((string) $data['content']) > ClientFiles::EDIT_MAX) {
-            return $this->fail('The file is too large to save online (max 2 MB).');
+            return $this->fail('The file is too large to save online (max 3 MB).');
         }
+        try {
+            $result = $this->files()->save($data['path'], (string) $data['content'], $data['encoding'] ?? 'utf-8', $data['mtime'] ?? null, $request->boolean('force'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->fail($e->getMessage());
+        }
+        if (! $result['ok']) {
+            return $this->fail($result['message'] ?? 'Unable to save file', ! empty($result['conflict']) ? 409 : 422, $result);
+        }
+        $this->audit('files', 'Edited '.$data['path']);
 
-        return $this->attempt(fn () => $this->files()->write($data['path'], (string) $data['content']), 'Saved '.basename($data['path']), 'Edited '.$data['path']);
+        return $this->ok('Saved '.basename($data['path']), $result);
     }
 
     public function create(Request $request)
@@ -121,13 +204,14 @@ class ClientFileController extends ClientPanelController
 
     public function upload(Request $request)
     {
-        $request->validate(['dir' => ['required', 'string', 'max:4096'], 'files' => ['required', 'array', 'max:50'], 'files.*' => ['file']]);
+        // the file manager sends files[], the code editor one file per request
+        $request->validate(['dir' => ['required', 'string', 'max:4096'], 'files' => ['required_without:file', 'array', 'max:50'], 'files.*' => ['file'], 'file' => ['nullable', 'file']]);
         if ($error = $this->quotaBlock()) {
             return $error;
         }
         $count = 0;
         try {
-            foreach ($request->file('files') as $file) {
+            foreach ($request->file('files') ?? [$request->file('file')] as $file) {
                 $this->files()->upload($file->getRealPath(), (string) $request->input('dir'), $file->getClientOriginalName());
                 $count++;
             }

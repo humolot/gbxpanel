@@ -63,7 +63,34 @@ class ClientToolsTest extends TestCase
         $this->postJson('/client/files/write', ['path' => '/www/wwwroot/joao.com/index.php', 'content' => '<?php echo 1;'])->assertOk();
         $this->post('/client/files/upload', ['dir' => '/www/wwwroot/joao.com', 'files' => [UploadedFile::fake()->create('photo.jpg', 20)]], ['Accept' => 'application/json'])->assertOk();
 
-        $this->getJson('/client/files/list?path=/www/wwwroot/joao.com')->assertJsonPath('items.0.name', 'wp-content');
+        $this->getJson('/client/files/list?path=/www/wwwroot/joao.com')->assertJsonPath('items.0.name', 'wp-content')->assertJsonPath('items.0.path', '/www/wwwroot/joao.com/wp-content');
+    }
+
+    public function test_code_editor_uses_the_client_routes(): void
+    {
+        $joao = $this->client('joao');
+        $maria = $this->client('maria');
+        Website::query()->create(['domain' => 'joao.com', 'root_path' => '/www/wwwroot/joao.com', 'client_id' => $joao->id]);
+        Website::query()->create(['domain' => 'maria.com', 'root_path' => '/www/wwwroot/maria.com', 'client_id' => $maria->id]);
+        $this->actingAs($joao, 'client');
+
+        $page = $this->get('/client/files/editor?embed=1&root=/www/wwwroot/maria.com')->assertOk()->assertSee('vs/loader.js', false);
+        $html = $page->getContent();
+        $this->assertStringContainsString('client\/files\/open', $html);
+        $this->assertStringContainsString('root:"\/www\/wwwroot\/joao.com"', str_replace(' ', '', $html), 'a root of another client falls back to the first website');
+        $this->assertStringNotContainsString('maria.com', $html);
+
+        $this->getJson('/client/files/open?path=/www/wwwroot/maria.com/index.php')->assertStatus(422);
+        $this->getJson('/client/files/search?dir=/www/wwwroot/maria.com&query=DB_PASSWORD')->assertStatus(422);
+        $this->getJson('/client/files/search?dir=/www/wwwroot/joao.com&query=hello')->assertOk()->assertJsonPath('dir', '/www/wwwroot/joao.com');
+
+        $opened = $this->getJson('/client/files/open?path=/www/wwwroot/joao.com/index.php')->assertOk()->assertJsonPath('path', '/www/wwwroot/joao.com/index.php')->json();
+        $saved = $this->postJson('/client/files/write', ['path' => '/www/wwwroot/joao.com/index.php', 'content' => '<?php echo 2;', 'encoding' => 'utf-8', 'mtime' => $opened['mtime']])->assertOk()->json();
+        $this->postJson('/client/files/write', ['path' => '/www/wwwroot/joao.com/index.php', 'content' => 'old tab', 'encoding' => 'utf-8', 'mtime' => $opened['mtime'] - 10])->assertStatus(409);
+        $this->postJson('/client/files/write', ['path' => '/www/wwwroot/maria.com/index.php', 'content' => 'x', 'encoding' => 'utf-8'])->assertStatus(422);
+        $this->assertGreaterThan(0, $saved['mtime']);
+
+        $this->post('/client/files/upload', ['dir' => '/www/wwwroot/joao.com', 'file' => UploadedFile::fake()->create('logo.png', 5)], ['Accept' => 'application/json'])->assertOk();
     }
 
     public function test_database_tools_are_scoped_and_imports_do_not_run_as_root(): void

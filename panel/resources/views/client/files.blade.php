@@ -32,6 +32,7 @@
                         </div>
                     </div>
                     <button class="btn btn-secondary" id="fmUploadBtn"><i class="bi bi-upload"></i> Upload</button>
+                    <button class="btn btn-secondary" id="fmEditor"><i class="bi bi-code-slash"></i> Code editor</button>
                     <input type="file" id="fmUpload" multiple hidden>
                 </div>
             </div>
@@ -61,38 +62,18 @@
     @endif
 @endsection
 
-@push('modals')
-    <div class="modal fade" id="editModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-pencil-square"></i> <span id="editTitle" class="font-mono"></span></h5>
-                    <span class="cell-sub ms-3 d-none d-md-inline">Ctrl+S to save</span>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <textarea id="editContent" class="form-control font-mono cron-code rounded-0 border-0" spellcheck="false" style="height: 68vh; resize: none;"></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="editSave"><i class="bi bi-save"></i> Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-@endpush
 
 @push('scripts')
 @if ($roots)
 <script>
 $(function () {
     var R = {
-        list: @json(route('client.files.list')), read: @json(route('client.files.read')), write: @json(route('client.files.write')),
+        list: @json(route('client.files.list')),
         create: @json(route('client.files.create')), rename: @json(route('client.files.rename')), del: @json(route('client.files.delete')),
         paste: @json(route('client.files.paste')), upload: @json(route('client.files.upload')), download: @json(route('client.files.download')),
         extract: @json(route('client.files.extract')), compress: @json(route('client.files.compress'))
     };
-    var esc = GBX.escape, path = @json($start), root = null, items = [], clip = null, editing = null;
+    var esc = GBX.escape, path = @json($start), root = null, items = [], clip = null;
     var editable = /\.(php|phtml|html?|css|scss|less|js|mjs|ts|json|xml|txt|md|ini|conf|env|htaccess|yml|yaml|sql|log|csv|svg|twig|vue|py|sh)$|^\.(htaccess|user\.ini|env)$/i;
     var archive = /\.(zip|tar\.gz|tgz|tar)$/i;
     var icons = { php: 'bi-filetype-php', js: 'bi-filetype-js', css: 'bi-filetype-css', html: 'bi-filetype-html', htm: 'bi-filetype-html', json: 'bi-filetype-json', zip: 'bi-file-zip', gz: 'bi-file-zip', png: 'bi-file-image', jpg: 'bi-file-image', jpeg: 'bi-file-image', gif: 'bi-file-image', svg: 'bi-filetype-svg', sql: 'bi-filetype-sql', txt: 'bi-file-text', md: 'bi-filetype-md', pdf: 'bi-file-pdf' };
@@ -162,26 +143,9 @@ $(function () {
     $('#fmCrumbs').on('click', 'a', function (e) { e.preventDefault(); load($(this).data('path')); });
     $('#fmFilter').on('input', render);
 
-    var openEditor = function (file) {
-        GBX.get(R.read, { path: file }).done(function (r) {
-            editing = file;
-            $('#editTitle').text(file.slice(root.length) || file);
-            $('#editContent').val(r.content);
-            bootstrap.Modal.getOrCreateInstance('#editModal').show();
-        });
-    };
-    var save = function () {
-        if (!editing) return;
-        var $b = $('#editSave');
-        GBX.busy($b, true);
-        GBX.post(R.write, { path: editing, content: $('#editContent').val() }).done(function (r) { toastr.success(r.message); }).always(function () { GBX.busy($b, false); });
-    };
-    $('#editSave').on('click', save);
-    $('#editContent').on('keydown', function (e) {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
-        if (e.key === 'Tab') { e.preventDefault(); var s = this.selectionStart; this.setRangeText('    ', s, this.selectionEnd, 'end'); }
-    });
-    $('#editModal').on('hidden.bs.modal', function () { editing = null; load(); });
+    // same code editor as the administrator (Monaco), limited to the websites of the client
+    var openEditor = function (file) { GBX.editor.open({ root: root, open: file }); };
+    $('#fmEditor').on('click', function () { GBX.editor.open({ root: path }); });
 
     $('#fmBody').on('click', '.fm-open', function (e) {
         e.preventDefault();

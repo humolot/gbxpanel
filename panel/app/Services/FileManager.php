@@ -174,6 +174,16 @@ class FileManager
             throw new \RuntimeException('This is a binary file and cannot be edited as text.');
         }
 
+        return $stat + ['path' => $path] + self::decodeText($raw, $encoding);
+    }
+
+    /**
+     * Editor text of raw file bytes: BOM, encoding (detected unless given) and line endings.
+     *
+     * @return array{content: string, encoding: string, eol: string}
+     */
+    public static function decodeText(string $raw, ?string $encoding = null): array
+    {
         $bom = str_starts_with($raw, self::BOM);
         if ($bom) {
             $raw = substr($raw, 3);
@@ -186,12 +196,18 @@ class FileManager
             ? mb_scrub($raw, 'UTF-8')
             : mb_convert_encoding($raw, 'UTF-8', self::ENCODINGS[$encoding]);
 
-        return $stat + [
-            'path' => $path,
-            'content' => $content,
-            'encoding' => $encoding,
-            'eol' => str_contains($raw, "\r\n") ? 'CRLF' : 'LF',
-        ];
+        return ['content' => $content, 'encoding' => $encoding, 'eol' => str_contains($raw, "\r\n") ? 'CRLF' : 'LF'];
+    }
+
+    /** Raw file bytes of editor text (UTF-8) in the given encoding. */
+    public static function encodeText(string $content, string $encoding): string
+    {
+        if (! isset(self::ENCODINGS[$encoding])) {
+            throw new \InvalidArgumentException('Unsupported encoding');
+        }
+        $raw = in_array($encoding, ['utf-8', 'utf-8-bom'], true) ? $content : mb_convert_encoding($content, self::ENCODINGS[$encoding], 'UTF-8');
+
+        return $encoding === 'utf-8-bom' ? self::BOM.$raw : $raw;
     }
 
     /**
@@ -203,17 +219,10 @@ class FileManager
     public function save(string $path, string $content, string $encoding = 'utf-8', ?int $expectedMtime = null, bool $force = false): array
     {
         $path = self::normalize($path);
-        if (! isset(self::ENCODINGS[$encoding])) {
-            throw new \InvalidArgumentException('Unsupported encoding');
-        }
+        $raw = self::encodeText($content, $encoding);
         $current = $this->stat($path);
         if (! $force && $expectedMtime && $current && $current['mtime'] !== $expectedMtime) {
             return ['ok' => false, 'conflict' => true, 'message' => 'The file was changed on the server after you opened it.', 'mtime' => $current['mtime']];
-        }
-
-        $raw = in_array($encoding, ['utf-8', 'utf-8-bom'], true) ? $content : mb_convert_encoding($content, self::ENCODINGS[$encoding], 'UTF-8');
-        if ($encoding === 'utf-8-bom') {
-            $raw = self::BOM.$raw;
         }
 
         if (Shell::simulating()) {
@@ -238,9 +247,11 @@ class FileManager
      * @param  array{mode?: string, case?: bool, word?: bool, regex?: bool, include?: string, skip_heavy?: bool}  $options
      * @return array{results: list<array{path: string, line?: int, text?: string}>, truncated: bool}
      */
-    public function search(string $dir, string $query, array $options = []): array
+    public function search(string $dir, string $query, array $options = [], ?\Closure $runner = null): array
     {
         $dir = self::normalize($dir);
+        // the client sub-panel runs the search as the website user
+        $runner ??= fn (string $cmd, int $timeout) => Shell::run($cmd, $timeout);
         $limit = 500;
         $mode = ($options['mode'] ?? 'content') === 'name' ? 'name' : 'content';
         $heavy = ['node_modules', 'vendor', '.git', '.svn', 'storage', 'cache', '.cache', 'dist', 'build'];
@@ -254,7 +265,7 @@ class FileManager
                 ? '\\( '.implode(' -o ', array_map(fn ($d) => '-name '.Shell::arg($d), $heavy)).' \\) -prune -o '
                 : '';
             $cmd = 'timeout 60 find '.Shell::arg($dir).' -mindepth 1 '.$prune.'-iname '.Shell::arg('*'.$query.'*').' -printf '.Shell::arg('%y\t%p\n').' 2>/dev/null | head -n '.($limit + 1);
-            $lines = array_filter(explode("\n", Shell::run($cmd, 70)->output));
+            $lines = array_filter(explode("\n", $runner($cmd, 70)->output));
             $results = [];
             foreach (array_slice($lines, 0, $limit) as $line) {
                 [$type, $path] = array_pad(explode("\t", $line, 2), 2, '');
@@ -280,7 +291,7 @@ class FileManager
         }
 
         $cmd = 'timeout 60 grep '.$flags.' -e '.Shell::arg($query).' -- '.Shell::arg($dir).' 2>/dev/null | head -n '.($limit + 1).' | cut -c1-2000';
-        $lines = array_values(array_filter(explode("\n", Shell::run($cmd, 70)->output), fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", $runner($cmd, 70)->output), fn ($l) => $l !== ''));
 
         $results = [];
         foreach (array_slice($lines, 0, $limit) as $line) {

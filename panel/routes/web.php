@@ -74,6 +74,9 @@ Route::prefix('client')->name('client.')->group(function () {
         Route::get('/files', [Controllers\Client\ClientFileController::class, 'index'])->name('files');
         Route::get('/files/list', [Controllers\Client\ClientFileController::class, 'list'])->name('files.list');
         Route::get('/files/read', [Controllers\Client\ClientFileController::class, 'read'])->name('files.read');
+        Route::get('/files/editor', [Controllers\Client\ClientFileController::class, 'editor'])->name('files.editor');
+        Route::get('/files/open', [Controllers\Client\ClientFileController::class, 'open'])->name('files.open');
+        Route::get('/files/search', [Controllers\Client\ClientFileController::class, 'search'])->name('files.search');
         Route::post('/files/write', [Controllers\Client\ClientFileController::class, 'write'])->name('files.write');
         Route::post('/files/create', [Controllers\Client\ClientFileController::class, 'create'])->name('files.create');
         Route::post('/files/rename', [Controllers\Client\ClientFileController::class, 'rename'])->name('files.rename');
