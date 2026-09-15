@@ -7,6 +7,7 @@ use App\Models\MysqlDatabase;
 use App\Models\Setting;
 use App\Models\Website;
 use App\Services\ApacheManager;
+use App\Services\BackupManager;
 use App\Services\FileManager;
 use App\Services\FtpManager;
 use App\Services\MysqlManager;
@@ -23,10 +24,14 @@ class WebsiteController extends Controller
 
     public function __construct(protected ApacheManager $apache) {}
 
-    public function index(SoftwareManager $software)
+    public function index(SoftwareManager $software, BackupManager $backups)
     {
+        $websites = Website::query()->withCount(['databases', 'ftpAccounts'])->orderBy('domain')->get();
+        $files = array_column($backups->list('site'), 'file');
+
         return view('websites.index', [
-            'websites' => Website::query()->withCount(['databases', 'ftpAccounts'])->orderBy('domain')->get(),
+            'websites' => $websites,
+            'backupCounts' => $websites->mapWithKeys(fn ($w) => [$w->id => count(array_filter($files, fn ($f) => str_starts_with($f, 'site/'.$w->domain.'_')))]),
             'phpVersions' => $software->phpVersions(),
             'defaultPhp' => config('gbx.default_php'),
             'wwwRoot' => config('gbx.paths.www'),
@@ -150,14 +155,10 @@ class WebsiteController extends Controller
         return $name;
     }
 
-    public function show(Website $website, SoftwareManager $software, SslManager $ssl)
+    /** Site settings live in the Conf modal of the website list. */
+    public function show(Website $website)
     {
-        return view('websites.show', [
-            'site' => $website->load(['databases', 'ftpAccounts']),
-            'phpVersions' => $software->phpVersions(),
-            'certificate' => $ssl->certificateInfo($website),
-            'sslEmail' => Setting::get('ssl_email', auth()->user()->email),
-        ]);
+        return redirect()->route('websites.index', ['conf' => $website->id]);
     }
 
     public function update(Request $request, Website $website)
@@ -295,16 +296,5 @@ class WebsiteController extends Controller
         $website->save();
 
         return $this->ok($website->force_https ? 'HTTPS redirect enabled' : 'HTTPS redirect disabled');
-    }
-
-    public function logs(Request $request, Website $website)
-    {
-        $type = $request->query('type') === 'access' ? 'access' : 'error';
-        $lines = min(5000, max(50, (int) $request->query('lines', 300)));
-        $content = Shell::simulating()
-            ? "[Sun Sep 14 10:00:00.000000 2026] [proxy_fcgi:error] [pid 1234] simulated {$type} log for {$website->domain}\n"
-            : Shell::run('tail -n '.$lines.' '.Shell::arg($website->logPath($type)).' 2>/dev/null', 20)->output;
-
-        return $this->ok('ok', ['content' => $content]);
     }
 }

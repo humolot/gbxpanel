@@ -70,6 +70,8 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
     // Websites
     Route::get('/websites', [Controllers\WebsiteController::class, 'index'])->name('websites.index');
     Route::post('/websites', [Controllers\WebsiteController::class, 'store'])->name('websites.store');
+    Route::get('/websites/stats', [Controllers\WebsiteSettingsController::class, 'stats'])->name('websites.stats');
+    Route::post('/websites/bulk', [Controllers\WebsiteSettingsController::class, 'bulk'])->name('websites.bulk');
     Route::get('/websites/{website}', [Controllers\WebsiteController::class, 'show'])->name('websites.show');
     Route::put('/websites/{website}', [Controllers\WebsiteController::class, 'update'])->name('websites.update');
     Route::delete('/websites/{website}', [Controllers\WebsiteController::class, 'destroy'])->name('websites.destroy');
@@ -80,7 +82,18 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
     Route::post('/websites/{website}/ssl/custom', [Controllers\WebsiteController::class, 'sslCustom'])->name('websites.ssl.custom');
     Route::post('/websites/{website}/ssl/disable', [Controllers\WebsiteController::class, 'sslDisable'])->name('websites.ssl.disable');
     Route::post('/websites/{website}/ssl/force', [Controllers\WebsiteController::class, 'sslForce'])->name('websites.ssl.force');
-    Route::get('/websites/{website}/logs', [Controllers\WebsiteController::class, 'logs'])->name('websites.logs');
+    Route::get('/websites/{website}/logs', [Controllers\WebsiteSettingsController::class, 'logs'])->name('websites.logs');
+    Route::post('/websites/{website}/logs/clear', [Controllers\WebsiteSettingsController::class, 'clearLog'])->name('websites.logs.clear');
+    Route::get('/websites/{website}/usage', [Controllers\WebsiteSettingsController::class, 'usage'])->name('websites.usage');
+    Route::post('/websites/{website}/meta', [Controllers\WebsiteSettingsController::class, 'meta'])->name('websites.meta');
+    Route::get('/websites/{website}/manage', [Controllers\WebsiteSettingsController::class, 'manage'])->name('websites.manage');
+    Route::get('/websites/{website}/manage/{section}', [Controllers\WebsiteSettingsController::class, 'data'])->name('websites.manage.data');
+    Route::post('/websites/{website}/manage/{section}', [Controllers\WebsiteSettingsController::class, 'update'])->name('websites.manage.update');
+    Route::get('/websites/{website}/backups', [Controllers\WebsiteSettingsController::class, 'backups'])->name('websites.backups');
+    Route::post('/websites/{website}/backups', [Controllers\WebsiteSettingsController::class, 'backupCreate'])->name('websites.backups.create');
+    Route::post('/websites/{website}/backups/restore', [Controllers\WebsiteSettingsController::class, 'backupRestore'])->name('websites.backups.restore');
+    Route::post('/websites/{website}/backups/delete', [Controllers\WebsiteSettingsController::class, 'backupDelete'])->name('websites.backups.delete');
+    Route::get('/websites/{website}/backups/download', [Controllers\WebsiteSettingsController::class, 'backupDownload'])->name('websites.backups.download');
 
     // FTP
     Route::get('/ftp', [Controllers\FtpController::class, 'index'])->name('ftp.index');

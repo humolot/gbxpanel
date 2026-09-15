@@ -26,6 +26,19 @@ class TaskHooks
                 }
             }
 
+            if (($meta['on_success'] ?? null) === 'git_deployed' && isset($meta['website_id'])) {
+                $site = Website::query()->find($meta['website_id']);
+                if ($site) {
+                    preg_match('/^Commit: (.+)$/m', $task->output(), $m);
+                    $site->putSetting('git.last_deploy', [
+                        'at' => now()->toDateTimeString(),
+                        'status' => $task->status,
+                        'task_id' => $task->id,
+                        'commit' => $m[1] ?? null,
+                    ])->save();
+                }
+            }
+
             if (($meta['on_finish'] ?? null) === 'malware_scan' && isset($meta['malware_scan_id'])) {
                 $scan = MalwareScan::query()->find($meta['malware_scan_id']);
                 if ($scan) {

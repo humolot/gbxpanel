@@ -10,3 +10,6 @@ Schedule::command('gbx:malware-scan --scheduled')->dailyAt('03:30')
     ->when(fn () => Setting::get('av_schedule', 'off') === 'daily');
 Schedule::command('gbx:malware-scan --scheduled')->weeklyOn(0, '04:00')
     ->when(fn () => Setting::get('av_schedule', 'off') === 'weekly');
+
+// Websites with an expiration date are stopped the day after it (Websites > Expiration)
+Schedule::command('gbx:expire-websites')->dailyAt('00:05');
