@@ -137,7 +137,7 @@ class WebsiteController extends Controller
     {
         $name = $base;
         $i = 1;
-        while (MysqlDatabase::query()->where('name', $name)->exists()) {
+        while (MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->where('name', $name)->exists()) {
             $name = substr($base, 0, 20).'_'.$i++;
         }
 
@@ -226,7 +226,7 @@ class WebsiteController extends Controller
 
         if ($request->boolean('delete_databases')) {
             foreach ($website->databases as $db) {
-                $mysql->drop($db->name, $db->username, $db->host);
+                \App\Services\Databases\Engines::get($db->engine)->drop($db->name, $db->username, $db->server);
                 $db->delete();
             }
         }

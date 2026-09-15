@@ -13,3 +13,8 @@ Schedule::command('gbx:malware-scan --scheduled')->weeklyOn(0, '04:00')
 
 // Websites with an expiration date are stopped the day after it (Websites > Expiration)
 Schedule::command('gbx:expire-websites')->dailyAt('00:05');
+
+// Databases: automatic backups at the configured time and recycle bin cleanup
+Schedule::command('gbx:backup-databases --scheduled')->dailyAt(Setting::get('db_backup_time', '02:30'))->withoutOverlapping()
+    ->when(fn () => (bool) Setting::get('db_backup_enabled', false));
+Schedule::command('gbx:backup-databases --purge-recycle')->dailyAt('04:10');

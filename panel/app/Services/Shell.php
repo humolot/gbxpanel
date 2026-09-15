@@ -85,6 +85,24 @@ class Shell
         return static::run($cmd, 60, $content);
     }
 
+    /**
+     * Store a secret (password file, client config) in a root-only temporary file and return
+     * its path. Command lines are visible to every local user in /proc, so credentials are
+     * passed to CLI tools through these files instead of arguments or inline scripts.
+     */
+    public static function secretFile(string $content, string $suffix = ''): string
+    {
+        $dir = '/root/.gbx-secrets';
+        $path = $dir.'/'.bin2hex(random_bytes(12)).$suffix;
+        if (static::simulating()) {
+            return $path;
+        }
+        static::run('mkdir -p '.static::arg($dir).' && chmod 700 '.static::arg($dir).' && find '.static::arg($dir).' -type f -mmin +180 -delete 2>/dev/null; true', 20);
+        static::writeFile($path, $content, '0600', 'root:root')->throw('Unable to write a temporary credentials file');
+
+        return $path;
+    }
+
     public static function readFile(string $path, int $maxBytes = 5242880): ?string
     {
         if (static::simulating()) {

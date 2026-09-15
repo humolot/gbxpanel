@@ -39,8 +39,8 @@ class DatabaseTools extends ToolGroup
                 return [
                     'server_installed' => $this->mysql->installed(),
                     'version' => $this->mysql->installed() ? $this->mysql->version() : null,
-                    'databases' => MysqlDatabase::query()->with('website:id,domain')->get()->map(fn ($d) => ['name' => $d->name, 'user' => $d->username.'@'.$d->host, 'website' => $d->website?->domain, 'exists' => isset($live[$d->name]), 'size' => isset($live[$d->name]) ? SystemStats::bytes($live[$d->name]['size']) : null, 'tables' => $live[$d->name]['tables'] ?? null]),
-                    'unmanaged' => array_values(array_diff(array_keys($live), MysqlDatabase::query()->pluck('name')->all())),
+                    'databases' => MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->with('website:id,domain')->get()->map(fn ($d) => ['name' => $d->name, 'user' => $d->username.'@'.$d->host, 'website' => $d->website?->domain, 'exists' => isset($live[$d->name]), 'size' => isset($live[$d->name]) ? SystemStats::bytes($live[$d->name]['size']) : null, 'tables' => $live[$d->name]['tables'] ?? null]),
+                    'unmanaged' => array_values(array_diff(array_keys($live), MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->pluck('name')->all())),
                 ];
 
             case 'query_database':
@@ -69,24 +69,24 @@ class DatabaseTools extends ToolGroup
                 $user = (string) (self::a($a, 'username') ?: $dbName);
                 $password = (string) (self::a($a, 'password') ?: Str::password(20, symbols: false));
                 $host = in_array(self::a($a, 'host'), ['localhost', '127.0.0.1', '%'], true) ? self::a($a, 'host') : 'localhost';
-                if (MysqlDatabase::query()->where('name', $dbName)->exists()) {
+                if (MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->where('name', $dbName)->exists()) {
                     return ['ok' => false, 'error' => 'A database with this name already exists.'];
                 }
-                $r = $this->mysql->create($dbName, $user, $password, 'utf8mb4', $host);
+                $r = $this->mysql->create($dbName, $user, $password, ['charset' => 'utf8mb4', 'hosts' => [$host]]);
                 if ($r->failed()) {
                     return ['ok' => false, 'error' => $r->message()];
                 }
                 $site = self::a($a, 'website') ? Website::query()->where('domain', strtolower(self::a($a, 'website')))->first() : null;
-                MysqlDatabase::query()->create(['name' => $dbName, 'username' => $user, 'password' => $password, 'host' => $host, 'website_id' => $site?->id, 'notes' => 'Created by AI assistant']);
+                MysqlDatabase::query()->create(['engine' => 'mysql', 'name' => $dbName, 'username' => $user, 'password' => $password, 'host' => $host, 'website_id' => $site?->id, 'notes' => 'Created by AI assistant']);
 
                 return ['ok' => true, 'database' => $dbName, 'username' => $user, 'password' => $password, 'host' => $host === '%' ? 'any' : 'localhost'];
 
             case 'delete_database':
-                $db = MysqlDatabase::query()->where('name', $a['name'])->first();
+                $db = MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->where('name', $a['name'])->first();
                 if (! $db) {
                     return ['error' => 'Database not managed by the panel.'];
                 }
-                $r = $this->mysql->drop($db->name, $db->username, $db->host);
+                $r = $this->mysql->drop($db->name, $db->username, null, $db->hosts());
                 if ($r->failed()) {
                     return ['ok' => false, 'error' => $r->message()];
                 }
@@ -95,12 +95,12 @@ class DatabaseTools extends ToolGroup
                 return ['ok' => true, 'message' => "Database {$a['name']} dropped"];
 
             case 'change_database_password':
-                $db = MysqlDatabase::query()->where('name', $a['name'])->first();
+                $db = MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->where('name', $a['name'])->first();
                 if (! $db) {
                     return ['error' => 'Database not managed by the panel.'];
                 }
                 $password = (string) (self::a($a, 'password') ?: Str::password(20, symbols: false));
-                $r = $this->mysql->changePassword($db->username, $password, $db->host);
+                $r = $this->mysql->changePassword($db->name, $db->username, $password, null, ['hosts' => $db->hosts()]);
                 if ($r->failed()) {
                     return ['ok' => false, 'error' => $r->message()];
                 }

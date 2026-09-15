@@ -109,6 +109,165 @@ echo "phpMyAdmin installed"',
         'uninstall' => 'rm -rf /usr/local/gbxpanel/phpmyadmin && systemctl reload apache2',
     ],
 
+    'postgresql' => [
+        'name' => 'PostgreSQL',
+        'category' => 'Database',
+        'icon' => 'bi-database-fill',
+        'description' => 'PostgreSQL server from the distribution repository (Databases > PostgreSQL).',
+        'service' => 'postgresql',
+        'detect' => 'command -v psql >/dev/null 2>&1 && test -d /etc/postgresql',
+        'version_cmd' => "psql --version | grep -oE '[0-9]+(\\.[0-9]+)+' | head -1",
+        'install' => $aptPrelude.'apt-get update -y && apt-get install -y postgresql postgresql-contrib && systemctl enable --now postgresql && runuser -u postgres -- psql -c "SELECT version();"',
+        'uninstall' => $aptPrelude.'systemctl stop postgresql || true; apt-get purge -y "postgresql*"; apt-get autoremove -y; echo "Data kept in /var/lib/postgresql"',
+    ],
+
+    'mongodb' => [
+        'name' => 'MongoDB',
+        'category' => 'Database',
+        'icon' => 'bi-diagram-2',
+        'description' => 'MongoDB Community 8.0 from the official repository. Requires a CPU with AVX.',
+        'service' => 'mongod',
+        'detect' => 'test -x /usr/bin/mongod',
+        'version_cmd' => "mongod --version | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' | head -1",
+        'config_file' => '/etc/mongod.conf',
+        'install' => $aptPrelude.'set -e
+. /etc/os-release
+apt-get install -y gnupg curl
+curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg
+if [ "$ID" = "ubuntu" ]; then
+  CODENAME="$VERSION_CODENAME"; case "$CODENAME" in noble|jammy|focal) ;; *) CODENAME=noble ;; esac
+  echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu $CODENAME/mongodb-org/8.0 multiverse" > /etc/apt/sources.list.d/mongodb-org-8.0.list
+else
+  echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main" > /etc/apt/sources.list.d/mongodb-org-8.0.list
+fi
+apt-get update -y
+apt-get install -y mongodb-org
+systemctl enable --now mongod
+sleep 3
+mongosh --quiet --eval "db.runCommand({ping: 1})"',
+        'uninstall' => $aptPrelude.'systemctl stop mongod || true; apt-get purge -y "mongodb-org*"; rm -f /etc/apt/sources.list.d/mongodb-org-8.0.list; apt-get autoremove -y; echo "Data kept in /var/lib/mongodb"',
+    ],
+
+    'qdrant' => [
+        'name' => 'Qdrant',
+        'category' => 'Database',
+        'icon' => 'bi-bounding-box-circles',
+        'description' => 'Vector database for AI search and RAG. Listens on 127.0.0.1:6333 with an API key (Databases > Qdrant).',
+        'service' => 'qdrant',
+        'detect' => 'test -x /usr/local/bin/qdrant',
+        'version_cmd' => "/usr/local/bin/qdrant --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' | head -1",
+        'config_file' => '/etc/qdrant/config.yaml',
+        'install' => $aptPrelude.'set -e
+apt-get install -y curl unzip ca-certificates
+case "$(uname -m)" in
+  x86_64) ASSET=qdrant-x86_64-unknown-linux-gnu.tar.gz ;;
+  aarch64|arm64) ASSET=qdrant-aarch64-unknown-linux-musl.tar.gz ;;
+  *) echo "Unsupported architecture $(uname -m)"; exit 1 ;;
+esac
+rm -rf /tmp/gbx-qdrant && mkdir -p /tmp/gbx-qdrant && cd /tmp/gbx-qdrant
+curl -fsSL "https://github.com/qdrant/qdrant/releases/latest/download/$ASSET" -o qdrant.tgz
+tar xzf qdrant.tgz
+install -m 755 qdrant /usr/local/bin/qdrant
+id qdrant >/dev/null 2>&1 || useradd --system --home-dir /var/lib/qdrant --shell /usr/sbin/nologin qdrant
+mkdir -p /var/lib/qdrant/storage /var/lib/qdrant/snapshots /etc/qdrant
+if curl -fsSL https://github.com/qdrant/qdrant-web-ui/releases/latest/download/dist-qdrant.zip -o ui.zip; then
+  rm -rf ui /var/lib/qdrant/static && unzip -q ui.zip -d ui && mkdir -p /var/lib/qdrant/static && cp -r ui/dist/* /var/lib/qdrant/static/ || true
+fi
+chown -R qdrant:qdrant /var/lib/qdrant
+if [ ! -f /etc/qdrant/config.yaml ]; then
+  printf "storage:\n  storage_path: /var/lib/qdrant/storage\n  snapshots_path: /var/lib/qdrant/snapshots\nservice:\n  host: 127.0.0.1\n  http_port: 6333\n  grpc_port: 6334\ntelemetry_disabled: true\n" > /etc/qdrant/config.yaml
+fi
+chown root:qdrant /etc/qdrant/config.yaml && chmod 640 /etc/qdrant/config.yaml
+cat > /etc/systemd/system/qdrant.service <<UNIT
+[Unit]
+Description=Qdrant vector database
+After=network.target
+
+[Service]
+User=qdrant
+Group=qdrant
+WorkingDirectory=/var/lib/qdrant
+ExecStart=/usr/local/bin/qdrant --config-path /etc/qdrant/config.yaml
+Restart=on-failure
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now qdrant
+sleep 3
+curl -fsS http://127.0.0.1:6333/ && echo
+rm -rf /tmp/gbx-qdrant',
+        'uninstall' => 'systemctl disable --now qdrant || true; rm -f /etc/systemd/system/qdrant.service /usr/local/bin/qdrant; systemctl daemon-reload; echo "Data kept in /var/lib/qdrant and /etc/qdrant"',
+    ],
+
+    'sqlserver' => [
+        'name' => 'SQL Server (Docker)',
+        'category' => 'Database',
+        'icon' => 'bi-server',
+        'description' => 'Microsoft SQL Server 2022 Express in a Docker container on 127.0.0.1:1433. Requires Docker and 2 GB of RAM.',
+        'service' => null,
+        'detect' => 'docker inspect gbx-mssql >/dev/null 2>&1',
+        'version_cmd' => "docker inspect -f '{{.Config.Image}}' gbx-mssql 2>/dev/null",
+        'install' => 'set -e
+command -v docker >/dev/null || { echo "Install Docker first (Home > Software)."; exit 1; }
+mkdir -p /www/server/mssql /www/backup/database/sqlserver
+chown -R 10001:0 /www/server/mssql /www/backup/database/sqlserver
+if [ ! -s /root/.gbx-mssql-sa ]; then
+  umask 077
+  printf "%s" "$(openssl rand -base64 24 | tr -dc A-Za-z0-9 | head -c 20)Aa1#" > /root/.gbx-mssql-sa
+fi
+docker rm -f gbx-mssql >/dev/null 2>&1 || true
+MSSQL_SA_PASSWORD="$(cat /root/.gbx-mssql-sa)" docker run -d --name gbx-mssql --restart unless-stopped \
+  -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD -e MSSQL_PID=Express -p 127.0.0.1:1433:1433 \
+  -v /www/server/mssql:/var/opt/mssql -v /www/backup/database/sqlserver:/var/opt/mssql/backup \
+  mcr.microsoft.com/mssql/server:2022-latest
+for i in $(seq 1 90); do docker logs gbx-mssql 2>&1 | grep -q "SQL Server is now ready" && break; sleep 2; done
+docker logs gbx-mssql 2>&1 | grep -q "SQL Server is now ready" || { docker logs --tail 30 gbx-mssql; exit 1; }
+echo "SQL Server is running on 127.0.0.1:1433"',
+        'uninstall' => 'docker rm -f gbx-mssql || true; echo "Data kept in /www/server/mssql"',
+    ],
+
+    'mssql-tools' => [
+        'name' => 'SQL Server command-line tools',
+        'category' => 'Database',
+        'icon' => 'bi-terminal',
+        'description' => 'sqlcmd (mssql-tools18) used to manage remote SQL Server databases.',
+        'service' => null,
+        'detect' => 'test -x /opt/mssql-tools18/bin/sqlcmd',
+        'version_cmd' => "/opt/mssql-tools18/bin/sqlcmd -? 2>/dev/null | grep -oE 'Version [0-9.]+' | head -1",
+        'install' => $aptPrelude.'set -e
+. /etc/os-release
+apt-get install -y curl gnupg
+curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /usr/share/keyrings/microsoft-prod.gpg
+if [ "$ID" = "ubuntu" ]; then REPO="https://packages.microsoft.com/ubuntu/$VERSION_ID/prod"; else REPO="https://packages.microsoft.com/debian/${VERSION_ID%%.*}/prod"; fi
+echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] $REPO $VERSION_CODENAME main" > /etc/apt/sources.list.d/mssql-release.list
+apt-get update -y
+ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc
+/opt/mssql-tools18/bin/sqlcmd -? | head -2',
+        'uninstall' => $aptPrelude.'apt-get purge -y mssql-tools18 msodbcsql18; rm -f /etc/apt/sources.list.d/mssql-release.list',
+    ],
+
+    'adminer' => [
+        'name' => 'Adminer',
+        'category' => 'Database',
+        'icon' => 'bi-window-stack',
+        'description' => 'Single-file database manager for MySQL and PostgreSQL at /adminer on the panel port.',
+        'service' => null,
+        'detect' => 'test -f /usr/local/gbxpanel/adminer/index.php',
+        'version_cmd' => "grep -oE 'Adminer [0-9]+\\.[0-9]+\\.[0-9]+' /usr/local/gbxpanel/adminer/index.php | head -1",
+        'install' => $aptPrelude.'set -e
+mkdir -p /usr/local/gbxpanel/adminer
+curl -fsSL https://www.adminer.org/latest.php -o /usr/local/gbxpanel/adminer/index.php
+apt-get install -y php8.4-pgsql || echo "php8.4-pgsql not available, PostgreSQL support disabled in Adminer"
+chown -R gbxpanel:gbxpanel /usr/local/gbxpanel/adminer
+systemctl restart gbxpanel-fpm || true
+/usr/local/gbxpanel/bin/gbx vhost
+echo "Adminer installed"',
+        'uninstall' => 'rm -rf /usr/local/gbxpanel/adminer && systemctl reload apache2',
+    ],
+
     'nodejs' => [
         'name' => 'Node.js',
         'category' => 'Runtime',

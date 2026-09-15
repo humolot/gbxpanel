@@ -44,7 +44,7 @@ class BackupTools extends ToolGroup
                 return $this->queued($this->backups->backupPath((string) $a['path'], self::a($a, 'label')), "The backup of {$a['path']}");
 
             case 'restore_database':
-                if (! MysqlDatabase::query()->where('name', $a['name'])->exists()) {
+                if (! MysqlDatabase::query()->engine('mysql')->whereNull('server_id')->where('name', $a['name'])->exists()) {
                     return ['error' => 'Database is not managed by the panel. Create it first with create_database.'];
                 }
 

@@ -66,7 +66,10 @@ class BackupManager
 
         if ($withDatabases) {
             foreach ($site->databases as $db) {
-                $script .= "\n".$this->mysql->backupScript($db->name);
+                $engine = \App\Services\Databases\Engines::get($db->engine);
+                if ($engine->canBackup($db->server) && ! ($engine instanceof \App\Services\Databases\SqlServerEngine)) {
+                    $script .= "\n".$engine->backupScript($db->name, $db->server);
+                }
             }
         }
 

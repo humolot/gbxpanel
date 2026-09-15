@@ -66,6 +66,16 @@ return [
         'token_ttl' => 60,
     ],
 
+    // phpMyAdmin and Adminer (/phpmyadmin, /adminer on the panel port). When not public, Apache only
+    // serves them to browsers holding the gbx_tools cookie set by Databases (gbx tools-access).
+    'tools' => [
+        'token' => env('GBX_TOOLS_TOKEN', ''),
+        'public' => env('GBX_TOOLS_TOKEN', '') === '' || filter_var(env('GBX_TOOLS_PUBLIC', false), FILTER_VALIDATE_BOOL),
+    ],
+
+    // Automatic database backups (Databases > Auto backup)
+    'database_backup_keep' => 7,
+
     // User that owns website files and runs PHP-FPM pools for sites.
     'web_user' => env('GBX_WEB_USER', 'www-data'),
 

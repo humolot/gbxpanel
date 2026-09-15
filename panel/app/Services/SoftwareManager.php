@@ -47,7 +47,7 @@ class SoftwareManager
     public function detect(string $key, array $item, ?string $version): array
     {
         $installed = Shell::simulating()
-            ? in_array($key.($version ? '-'.$version : ''), ['php-8.4', 'php-8.3', 'apache', 'mysql', 'nodejs-22', 'composer', 'supervisor', 'certbot', 'phpmyadmin', 'redis', 'docker'], true)
+            ? in_array($key.($version ? '-'.$version : ''), ['php-8.4', 'php-8.3', 'apache', 'mysql', 'nodejs-22', 'composer', 'supervisor', 'certbot', 'phpmyadmin', 'redis', 'docker', 'postgresql', 'qdrant', 'adminer'], true)
             : Shell::test($this->fill($item['detect'], $version), false);
 
         $service = $this->fill($item['service'] ?? null, $version);
@@ -55,7 +55,7 @@ class SoftwareManager
         $installedVersion = null;
         if ($installed) {
             if (Shell::simulating()) {
-                $installedVersion = ['php' => $version.'.12', 'apache' => '2.4.58', 'mysql' => '8.0.45', 'nodejs' => '22.9.0 / npm 10.8.3', 'composer' => '2.8.10', 'supervisor' => '4.2.5', 'certbot' => '2.9.0', 'phpmyadmin' => '5.2.2', 'redis' => '7.0.15', 'docker' => '27.3.1'][$key] ?? null;
+                $installedVersion = ['php' => $version.'.12', 'apache' => '2.4.58', 'mysql' => '8.0.45', 'nodejs' => '22.9.0 / npm 10.8.3', 'composer' => '2.8.10', 'supervisor' => '4.2.5', 'certbot' => '2.9.0', 'phpmyadmin' => '5.2.2', 'redis' => '7.0.15', 'docker' => '27.3.1', 'postgresql' => '16.4', 'qdrant' => '1.12.4', 'adminer' => '5.3.0'][$key] ?? null;
             } elseif (! empty($item['version_cmd'])) {
                 $installedVersion = Shell::out($this->fill($item['version_cmd'], $version), 10, false) ?: null;
             }

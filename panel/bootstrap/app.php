@@ -25,7 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->trustProxies(at: '127.0.0.1');
         // file contents (code editor, config editors) must be saved byte for byte
-        $middleware->trimStrings(except: ['content']);
+        $middleware->trimStrings(except: ['content', 'value']);
+        // read by Apache to allow phpMyAdmin/Adminer (see config gbx.tools)
+        $middleware->encryptCookies(except: ['gbx_tools']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // AJAX calls always receive a JSON payload the frontend can toast.

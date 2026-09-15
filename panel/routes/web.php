@@ -104,15 +104,64 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
 
     // Databases
     Route::get('/databases', [Controllers\DatabaseController::class, 'index'])->name('databases.index');
+    Route::get('/databases/live', [Controllers\DatabaseController::class, 'live'])->name('databases.live');
     Route::post('/databases', [Controllers\DatabaseController::class, 'store'])->name('databases.store');
     Route::post('/databases/sync', [Controllers\DatabaseController::class, 'sync'])->name('databases.sync');
+    Route::post('/databases/sync-users', [Controllers\DatabaseController::class, 'syncUsers'])->name('databases.sync.users');
+    Route::post('/databases/root-password', [Controllers\DatabaseController::class, 'rootPassword'])->name('databases.root');
+    Route::post('/databases/auto-backup', [Controllers\DatabaseController::class, 'autoBackup'])->name('databases.autobackup');
+    Route::post('/databases/bulk', [Controllers\DatabaseController::class, 'bulk'])->name('databases.bulk');
+    Route::post('/databases/mongodb/auth', [Controllers\DatabaseController::class, 'mongoAuth'])->name('databases.mongo.auth');
+    Route::get('/databases/open/{tool}', [Controllers\DatabaseController::class, 'openTool'])->name('databases.tool');
+    Route::post('/databases/tools-access', [Controllers\DatabaseController::class, 'toolsAccess'])->name('databases.tools.access');
+    Route::post('/databases/servers', [Controllers\DatabaseController::class, 'serverStore'])->name('databases.servers.store');
+    Route::delete('/databases/servers/{server}', [Controllers\DatabaseController::class, 'serverDestroy'])->name('databases.servers.destroy');
+    Route::get('/databases/recycle', [Controllers\DatabaseController::class, 'recycle'])->name('databases.recycle');
+    Route::post('/databases/recycle/{item}/restore', [Controllers\DatabaseController::class, 'recycleRestore'])->name('databases.recycle.restore');
+    Route::delete('/databases/recycle/{item}', [Controllers\DatabaseController::class, 'recycleDestroy'])->name('databases.recycle.destroy');
+    Route::get('/databases/backups/{engine}/{file}', [Controllers\DatabaseController::class, 'downloadBackup'])->name('databases.backups.download');
+    Route::delete('/databases/backups/{engine}/{file}', [Controllers\DatabaseController::class, 'deleteBackup'])->name('databases.backups.delete');
+
+    // Redis
+    Route::get('/databases/redis/overview', [Controllers\RedisController::class, 'overview'])->name('redis.overview');
+    Route::post('/databases/redis/connect', [Controllers\RedisController::class, 'connect'])->name('redis.connect');
+    Route::get('/databases/redis/keys', [Controllers\RedisController::class, 'keys'])->name('redis.keys');
+    Route::get('/databases/redis/key', [Controllers\RedisController::class, 'show'])->name('redis.key');
+    Route::post('/databases/redis/key', [Controllers\RedisController::class, 'store'])->name('redis.key.store');
+    Route::post('/databases/redis/delete', [Controllers\RedisController::class, 'destroy'])->name('redis.key.delete');
+    Route::post('/databases/redis/expire', [Controllers\RedisController::class, 'expire'])->name('redis.key.expire');
+    Route::post('/databases/redis/flush', [Controllers\RedisController::class, 'flush'])->name('redis.flush');
+    Route::post('/databases/redis/config', [Controllers\RedisController::class, 'configure'])->name('redis.config');
+    Route::get('/databases/redis/backups', [Controllers\RedisController::class, 'backups'])->name('redis.backups');
+    Route::post('/databases/redis/backups', [Controllers\RedisController::class, 'backup'])->name('redis.backup');
+    Route::post('/databases/redis/restore', [Controllers\RedisController::class, 'restore'])->name('redis.restore');
+    Route::get('/databases/redis/backups/{file}', [Controllers\RedisController::class, 'download'])->name('redis.backups.download');
+    Route::delete('/databases/redis/backups/{file}', [Controllers\RedisController::class, 'deleteBackup'])->name('redis.backups.delete');
+
+    // Qdrant
+    Route::get('/databases/qdrant/overview', [Controllers\QdrantController::class, 'overview'])->name('qdrant.overview');
+    Route::post('/databases/qdrant/settings', [Controllers\QdrantController::class, 'settings'])->name('qdrant.settings');
+    Route::post('/databases/qdrant/collections', [Controllers\QdrantController::class, 'store'])->name('qdrant.store');
+    Route::get('/databases/qdrant/collections/{name}', [Controllers\QdrantController::class, 'show'])->name('qdrant.show');
+    Route::delete('/databases/qdrant/collections/{name}', [Controllers\QdrantController::class, 'destroy'])->name('qdrant.destroy');
+    Route::get('/databases/qdrant/collections/{name}/points', [Controllers\QdrantController::class, 'points'])->name('qdrant.points');
+    Route::get('/databases/qdrant/collections/{name}/snapshots', [Controllers\QdrantController::class, 'snapshots'])->name('qdrant.snapshots');
+    Route::post('/databases/qdrant/collections/{name}/snapshots', [Controllers\QdrantController::class, 'createSnapshot'])->name('qdrant.snapshots.create');
+    Route::post('/databases/qdrant/collections/{name}/restore', [Controllers\QdrantController::class, 'restoreSnapshot'])->name('qdrant.snapshots.restore');
+    Route::get('/databases/qdrant/collections/{name}/snapshots/{snapshot}', [Controllers\QdrantController::class, 'downloadSnapshot'])->name('qdrant.snapshots.download');
+    Route::delete('/databases/qdrant/collections/{name}/snapshots/{snapshot}', [Controllers\QdrantController::class, 'deleteSnapshot'])->name('qdrant.snapshots.delete');
+
     Route::post('/databases/{database}/password', [Controllers\DatabaseController::class, 'password'])->name('databases.password');
+    Route::post('/databases/{database}/permission', [Controllers\DatabaseController::class, 'permission'])->name('databases.permission');
     Route::get('/databases/{database}/credentials', [Controllers\DatabaseController::class, 'credentials'])->name('databases.credentials');
+    Route::get('/databases/{database}/tables', [Controllers\DatabaseController::class, 'tables'])->name('databases.tables');
+    Route::post('/databases/{database}/tables', [Controllers\DatabaseController::class, 'tablesAction'])->name('databases.tables.action');
+    Route::post('/databases/{database}/meta', [Controllers\DatabaseController::class, 'meta'])->name('databases.meta');
+    Route::get('/databases/{database}/backups', [Controllers\DatabaseController::class, 'backups'])->name('databases.backups');
     Route::post('/databases/{database}/backup', [Controllers\DatabaseController::class, 'backup'])->name('databases.backup');
+    Route::post('/databases/{database}/restore', [Controllers\DatabaseController::class, 'restore'])->name('databases.restore');
     Route::post('/databases/{database}/import', [Controllers\DatabaseController::class, 'import'])->name('databases.import');
     Route::delete('/databases/{database}', [Controllers\DatabaseController::class, 'destroy'])->name('databases.destroy');
-    Route::get('/databases-backups/{name}', [Controllers\DatabaseController::class, 'downloadBackup'])->name('databases.backups.download');
-    Route::delete('/databases-backups/{name}', [Controllers\DatabaseController::class, 'deleteBackup'])->name('databases.backups.delete');
 
     // Docker
     Route::get('/docker', [Controllers\DockerController::class, 'index'])->name('docker.index');

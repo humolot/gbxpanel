@@ -531,3 +531,60 @@ table.dataTable > thead > tr > th .dt-column-order { opacity: .5; }
     .sm-add-row textarea { max-width: none; }
 }
 .site-modal .modal-title, #backupModal .modal-title { display: block; }
+
+/* ---------------------------------------------------------------- databases */
+.db-tabs { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; padding: .35rem; background: var(--gbx-surface); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); }
+.db-tabs-nav { display: flex; gap: .2rem; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.db-tabs-nav::-webkit-scrollbar { display: none; }
+.db-tabs-nav a { position: relative; display: inline-flex; align-items: center; gap: .45rem; padding: .55rem 1rem; border-radius: 8px; color: var(--gbx-text-2); text-decoration: none; font-size: .86rem; white-space: nowrap; }
+.db-tabs-nav a i { color: var(--gbx-muted); }
+.db-tabs-nav a:hover { background: var(--gbx-surface-2); color: #fff; }
+.db-tabs-nav a.active { background: var(--gbx-surface-3); color: var(--gbx-success); font-weight: 600; }
+.db-tabs-nav a.active i { color: var(--gbx-success); }
+.db-tabs-nav a.active::after { content: ""; position: absolute; left: 35%; right: 35%; bottom: 3px; height: 2px; border-radius: 2px; background: var(--gbx-success); }
+.db-tabs-meta { margin-left: auto; display: flex; gap: .5rem; align-items: center; padding-right: .35rem; }
+.db-tabs-meta .gbx-chip { text-decoration: none; }
+
+.db-notice { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; padding: .75rem 1rem; margin-bottom: 1rem; background: var(--gbx-surface); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); font-size: .84rem; }
+.db-notice > i { color: var(--gbx-info); }
+
+.db-toolbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .85rem 1rem; border-bottom: 1px solid var(--gbx-border); }
+.db-toolbar .btn { white-space: nowrap; }
+.db-toolbar-right { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.db-toolbar-right .form-select { width: auto; min-width: 140px; }
+.db-sep { width: 1px; height: 22px; background: var(--gbx-border-strong); margin: 0 .15rem; }
+.db-search { position: relative; }
+.db-search input { width: 230px; padding-right: 2rem; }
+.db-search i { position: absolute; right: .7rem; top: 50%; transform: translateY(-50%); color: var(--gbx-muted); pointer-events: none; }
+
+.db-alert { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin: .75rem 1rem 0; padding: .55rem .8rem; border-radius: 8px; background: rgba(106, 167, 255, .07); border: 1px solid rgba(106, 167, 255, .22); font-size: .82rem; }
+.db-alert.warning { background: rgba(245, 180, 84, .07); border-color: rgba(245, 180, 84, .25); }
+.db-alert > i { color: var(--gbx-info); }
+.db-alert.warning > i { color: var(--gbx-warning); }
+
+.db-table td { vertical-align: middle; }
+.db-table > :not(caption) > * > * { padding-left: .5rem; padding-right: .5rem; }
+.db-ops a { color: var(--gbx-success); text-decoration: none; font-size: .8rem; }
+.db-ops a + a { margin-left: .1rem; padding-left: .35rem; border-left: 1px solid var(--gbx-border-strong); }
+.db-ops a:hover { text-decoration: underline; }
+.db-ops a.text-danger { color: var(--gbx-danger) !important; }
+.db-icon { border: 0; background: transparent; color: var(--gbx-muted); padding: 0 .2rem; }
+.db-icon:hover { color: #fff; }
+.db-pass { font-size: .78rem; margin-right: .2rem; }
+
+.db-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-bottom: 1px solid var(--gbx-border); }
+.db-stats > div { padding: .75rem 1rem; border-right: 1px solid var(--gbx-border); }
+.db-stats > div:last-child { border-right: 0; }
+.db-stats span { display: block; font-size: .72rem; color: var(--gbx-muted); }
+.db-stats strong { display: block; font-size: .95rem; font-weight: 600; color: #fff; margin-top: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#dbTable_wrapper .dataTables_info, #dbTable_wrapper .dt-info { font-size: .78rem; color: var(--gbx-muted); }
+
+@media (max-width: 991.98px) {
+    .db-tabs { flex-direction: column; align-items: stretch; }
+    .db-tabs-meta { margin-left: 0; padding: 0 .35rem .2rem; }
+    .db-toolbar-right { margin-left: 0; width: 100%; }
+    .db-search { flex: 1; }
+    .db-search input { width: 100%; }
+    .db-sep { display: none; }
+}
