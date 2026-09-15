@@ -49,18 +49,38 @@ class BackupManager
         return $rows;
     }
 
-    public function backupWebsite(Website $site, bool $withDatabases = true, array $exclude = []): Task
+    /**
+     * @param  array{storage_id?: int, delete_local?: bool, keep?: ?int}  $upload  destination for the finished backup
+     */
+    public function backupWebsite(Website $site, bool $withDatabases = true, array $exclude = [], array $upload = []): Task
     {
-        [$script, $target] = $this->websiteBackupScript($site, $withDatabases, $exclude);
+        [$script, $target, $dumps] = $this->websiteBackupScript($site, $withDatabases, $exclude);
+        $meta = ['website_id' => $site->id, 'file' => $target];
+        if (! empty($upload['storage_id'])) {
+            $meta['upload'] = [
+                'storage_id' => (int) $upload['storage_id'],
+                'delete_local' => (bool) ($upload['delete_local'] ?? false),
+                'keep' => $upload['keep'] ?? null,
+                'files' => array_merge(
+                    [['file' => $target, 'category' => 'site', 'label' => $site->domain]],
+                    array_map(fn (array $d) => ['file' => $d['file'], 'category' => 'database', 'label' => $d['engine'].'/'.$d['name']], $dumps),
+                ),
+            ];
+        }
 
-        return TaskRunner::dispatch("Backup website {$site->domain}", $script, 'backup', ['website_id' => $site->id, 'file' => $target]);
+        return TaskRunner::dispatch("Backup website {$site->domain}", $script, 'backup', $meta);
     }
 
-    /** @return array{0: string, 1: string} script and archive path */
+    /**
+     * @return array{0: string, 1: string, 2: list<array{file: string, engine: string, name: string}>}
+     *               script, archive path and the database dumps the script writes
+     */
     public function websiteBackupScript(Website $site, bool $withDatabases = true, array $exclude = [], ?string $stamp = null): array
     {
         $scheduled = $stamp !== null;
         $stamp ??= date('Ymd_His');
+        // manual backups keep one timestamp for the archive and the dumps, so both can be uploaded
+        $fixedStamp = $scheduled ? null : $stamp;
         $target = $this->root().'/site/'.$site->domain.'_'.$stamp.'.tar.gz';
         $excludes = '';
         foreach (array_unique(array_merge(['node_modules', '.cache'], $exclude)) as $pattern) {
@@ -73,14 +93,16 @@ class BackupManager
             .'tar -czf '.Shell::arg($target).$excludes.' -C '.Shell::arg(dirname($site->root_path)).' '.Shell::arg(basename($site->root_path))."\n"
             .'echo "Files: $(du -h '.Shell::arg($target).' | cut -f1) '.$target.'"';
 
+        $dumps = [];
         if ($withDatabases) {
             foreach ($site->databases as $db) {
                 $engine = \App\Services\Databases\Engines::get($db->engine);
                 // scheduled jobs skip remote databases: their temporary credential files would not survive the first run
                 if ($engine->canBackup($db->server) && ! ($engine instanceof \App\Services\Databases\SqlServerEngine) && ! ($scheduled && $db->server)) {
-                    \App\Services\Databases\DatabaseEngine::$stampOverride = $scheduled ? $stamp : null;
+                    \App\Services\Databases\DatabaseEngine::$stampOverride = $scheduled ? $stamp : $fixedStamp;
                     try {
                         $script .= "\n".($scheduled ? $engine->scheduledBackupScript($db->name) : $engine->backupScript($db->name, $db->server));
+                        $dumps[] = ['file' => $engine->newBackupFile($db->name), 'engine' => $db->engine, 'name' => $db->name];
                     } finally {
                         \App\Services\Databases\DatabaseEngine::$stampOverride = null;
                     }
@@ -88,7 +110,7 @@ class BackupManager
             }
         }
 
-        return [$script, $target];
+        return [$script, $target, $dumps];
     }
 
     public function backupDatabase(string $name): Task

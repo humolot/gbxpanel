@@ -178,8 +178,13 @@ function siteCreated(res) {
         bootstrap.Modal.getOrCreateInstance('#backupModal').show();
         loadBackups();
     });
+    $(document).on('change', '#backupStorage', function () { $('#backupMoveWrap').prop('hidden', !this.value); });
     $('#backupNow').on('click', function () {
-        GBX.post(siteUrl(backupSite.id, 'backups'), { databases: $('#backupDbs').is(':checked') ? 1 : 0 }, { onTaskDone: loadBackups });
+        GBX.post(siteUrl(backupSite.id, 'backups'), {
+            databases: $('#backupDbs').is(':checked') ? 1 : 0,
+            storage_id: $('#backupStorage').val() || '',
+            delete_local: $('#backupMove').is(':checked') ? 1 : 0
+        }, { onTaskDone: loadBackups });
     });
     $('#backupList').on('click', '[data-backup]', function () {
         var file = $(this).closest('tr').data('file'), act = $(this).data('backup');

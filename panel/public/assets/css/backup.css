@@ -1,0 +1,18 @@
+/* GBX Panel - Backup module */
+.bk-table td { vertical-align: middle; }
+.bk-table .cell-strong { font-weight: 600; }
+.bk-error { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e08a92; }
+.bk-file { min-width: 230px; }
+.bk-progress { min-width: 180px; max-width: 320px; }
+.bk-group-title { margin: 1.2rem 0 .5rem; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gbx-muted); }
+.bk-type { cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.bk-type:hover { border-color: var(--gbx-border-strong); background: var(--gbx-surface-2); }
+.bk-type .bi-plus-lg { color: var(--gbx-muted); }
+.bk-oauth { margin-top: .4rem; padding: .75rem .9rem; background: var(--gbx-surface-2); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); }
+.bk-code { display: block; padding: .35rem .5rem; background: var(--gbx-surface-3); border-radius: 6px; font-size: .74rem; color: var(--gbx-text-2); overflow-x: auto; white-space: nowrap; }
+.bk-log { margin: 0; padding: 1rem; max-height: 70vh; overflow: auto; font-family: var(--gbx-mono); font-size: .76rem; line-height: 1.5; color: var(--gbx-text-2); white-space: pre-wrap; word-break: break-word; }
+.gbx-chip.chip-danger { border-color: rgba(224, 138, 146, .4); color: #e08a92; }
+.gbx-chip.chip-danger i { color: #e08a92; }
+@media (max-width: 575.98px) {
+    .bk-progress { max-width: 160px; }
+}

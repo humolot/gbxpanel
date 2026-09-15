@@ -174,6 +174,7 @@
         $form.find('[data-hide-flow]').prop('hidden', type === 'flow');
         hint($form.find('[name=script_id]'), $form.find('[name=args]'));
         hint($form.find('[name=then_script_id]'), $form.find('[name=then_args]'));
+        storageOptions();
         $form.find('[name=match]').prop('hidden', ['contains', 'not_contains'].indexOf($form.find('[name=condition]').val()) === -1);
         filterDatabases();
     };
@@ -202,6 +203,10 @@
             if (!$form.find('[name=name]').val()) $form.find('[name=name]').val(r.script.name);
         }).always(function () { $sel.val(''); });
     });
+
+    // the options of a remote destination only apply when one is chosen
+    var storageOptions = function () { $('.cron-remote').prop('hidden', !$('#cronStorage').val()); };
+    $(document).on('change', '#cronStorage', storageOptions);
 
     var openJob = function (type, job) {
         editing = job ? job.id : null;

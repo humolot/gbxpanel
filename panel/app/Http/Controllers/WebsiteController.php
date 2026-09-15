@@ -36,6 +36,7 @@ class WebsiteController extends Controller
             'defaultPhp' => config('gbx.default_php'),
             'wwwRoot' => config('gbx.paths.www'),
             'mysql' => $software->mysqlInstalled(),
+            'storages' => \App\Models\BackupStorage::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

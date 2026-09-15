@@ -525,12 +525,31 @@ class DatabaseController extends Controller
             'enabled' => (bool) Setting::get('db_backup_enabled', false),
             'time' => Setting::get('db_backup_time', '02:30'),
             'keep' => (int) Setting::get('db_backup_keep', config('gbx.database_backup_keep')),
+            'storage' => (int) Setting::get('db_backup_storage', 0),
+            'storage_move' => (bool) Setting::get('db_backup_storage_move', false),
+            'remote_keep' => (int) Setting::get('db_backup_remote_keep', 30),
+            'storages' => \App\Models\BackupStorage::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ];
     }
 
     public function autoBackup(Request $request)
     {
-        $data = $request->validate(['time' => ['nullable', 'date_format:H:i'], 'keep' => ['nullable', 'integer', 'min:1', 'max:90']]);
+        $data = $request->validate([
+            'time' => ['nullable', 'date_format:H:i'],
+            'keep' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'storage' => ['nullable', 'integer'],
+            'storage_move' => ['nullable', 'boolean'],
+            'remote_keep' => ['nullable', 'integer', 'min:1', 'max:365'],
+        ]);
+        if ($request->has('storage')) {
+            $storage = (int) $request->input('storage');
+            if ($storage > 0 && ! \App\Models\BackupStorage::query()->whereKey($storage)->exists()) {
+                return $this->fail('Storage not found.');
+            }
+            Setting::put('db_backup_storage', $storage);
+            Setting::put('db_backup_storage_move', $storage > 0 && $request->boolean('storage_move'));
+            Setting::put('db_backup_remote_keep', (int) ($data['remote_keep'] ?? 30));
+        }
         Setting::put('db_backup_enabled', $request->boolean('enabled'));
         if (! empty($data['time'])) {
             Setting::put('db_backup_time', $data['time']);

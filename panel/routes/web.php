@@ -439,6 +439,31 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::post('/clients/{client}/resources', [Controllers\ClientController::class, 'assign'])->name('clients.assign');
         Route::post('/clients/{client}/login', [Controllers\Client\ClientAuthController::class, 'impersonate'])->name('clients.impersonate');
 
+        // Backup: remote storages (rclone) and the transfers between them
+        Route::get('/backup', [Controllers\BackupController::class, 'index'])->name('backup.index');
+        Route::post('/backup/settings', [Controllers\BackupController::class, 'saveSettings'])->name('backup.settings');
+        Route::post('/backup/install', [Controllers\BackupController::class, 'install'])->name('backup.install');
+        Route::get('/backup/local', [Controllers\BackupController::class, 'localList'])->name('backup.local');
+        Route::post('/backup/upload', [Controllers\BackupController::class, 'upload'])->name('backup.upload');
+        Route::get('/backup/transfers', [Controllers\BackupController::class, 'transferList'])->name('backup.transfers');
+        Route::get('/backup/transfers/{transfer}/log', [Controllers\BackupController::class, 'transferLog'])->name('backup.transfers.log');
+        Route::post('/backup/transfers/{transfer}/retry', [Controllers\BackupController::class, 'transferRetry'])->name('backup.transfers.retry');
+        Route::post('/backup/transfers/{transfer}/cancel', [Controllers\BackupController::class, 'transferCancel'])->name('backup.transfers.cancel');
+        Route::delete('/backup/transfers/{transfer}', [Controllers\BackupController::class, 'transferDestroy'])->name('backup.transfers.destroy');
+        Route::get('/backup/google/callback', [Controllers\BackupController::class, 'googleCallback'])->name('backup.google.callback');
+        Route::post('/backup/google/start', [Controllers\BackupController::class, 'googleStart'])->name('backup.google.start');
+        Route::get('/backup/storages', [Controllers\BackupController::class, 'storageList'])->name('backup.storages');
+        Route::post('/backup/storages', [Controllers\BackupController::class, 'storageStore'])->name('backup.storages.store');
+        Route::put('/backup/storages/{storage}', [Controllers\BackupController::class, 'storageUpdate'])->name('backup.storages.update');
+        Route::delete('/backup/storages/{storage}', [Controllers\BackupController::class, 'storageDestroy'])->name('backup.storages.destroy');
+        Route::post('/backup/storages/{storage}/toggle', [Controllers\BackupController::class, 'storageToggle'])->name('backup.storages.toggle');
+        Route::post('/backup/storages/{storage}/test', [Controllers\BackupController::class, 'storageTest'])->name('backup.storages.test');
+        Route::post('/backup/storages/{storage}/usage', [Controllers\BackupController::class, 'storageUsage'])->name('backup.storages.usage');
+        Route::get('/backup/storages/{storage}/browse', [Controllers\BackupController::class, 'browse'])->name('backup.storages.browse');
+        Route::get('/backup/storages/{storage}/download', [Controllers\BackupController::class, 'download'])->name('backup.storages.download');
+        Route::post('/backup/storages/{storage}/fetch', [Controllers\BackupController::class, 'fetch'])->name('backup.storages.fetch');
+        Route::post('/backup/storages/{storage}/delete-file', [Controllers\BackupController::class, 'deleteFile'])->name('backup.storages.delete-file');
+
         Route::get('/settings', [Controllers\SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings/panel', [Controllers\SettingsController::class, 'panel'])->name('settings.panel');
         Route::post('/settings/access', [Controllers\SettingsController::class, 'access'])->name('settings.access');

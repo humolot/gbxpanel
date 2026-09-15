@@ -180,6 +180,26 @@ class CronManager
         return trim("{$interpreter} {$argv} {$redirect}").' '.self::heredoc($script->content);
     }
 
+    /**
+     * Upload of a finished backup to a storage, added to scheduled backup jobs.
+     * The panel command records the transfer, sends the file with rclone and applies the
+     * retention at the destination; its output ends up in the log of the cron job.
+     */
+    protected static function pushLine(array $params, CronJob $job, string $file, string $category, string $label): string
+    {
+        $storage = (int) ($params['storage'] ?? 0);
+        if ($storage <= 0) {
+            return '';
+        }
+        $command = 'runuser -u '.Shell::arg((string) config('gbx.system_user', 'gbxpanel')).' -- '
+            .Shell::arg((string) config('gbx.php_cli', '/usr/bin/php8.4')).' '.Shell::arg(base_path('artisan')).' gbx:backup-push'
+            .' --storage='.$storage.' --category='.$category.' --label='.Shell::arg($label)
+            .' --keep='.max(1, (int) ($params['remote_keep'] ?? 30)).(! empty($params['storage_move']) ? ' --move' : '')
+            .' --cron='.(int) $job->id.' -- '.Shell::arg($file);
+
+        return "  {$command} || FAILED=1\n";
+    }
+
     /** Delete all but the newest $keep files matching a glob. */
     protected static function retention(string $glob, int $keep): string
     {
@@ -207,19 +227,24 @@ class CronManager
         $body = match ($job->type) {
             'shell' => (string) $job->command,
 
-            'site_backup' => (function () use ($p, $keep, $backup) {
+            'site_backup' => (function () use ($p, $keep, $backup, $job) {
                 $sites = ($p['website'] ?? 'all') === 'all' ? Website::query()->orderBy('domain')->get() : Website::query()->whereKey($p['website'])->get();
                 $out = '';
                 foreach ($sites as $site) {
-                    [$script] = app(BackupManager::class)->websiteBackupScript($site, (bool) ($p['databases'] ?? true), array_filter(array_map('trim', explode(',', (string) ($p['exclude'] ?? '')))), self::STAMP);
-                    $out .= "echo '==> {$site->domain}'\n(\n{$script}\n)\n[ \$? -eq 0 ] || { echo 'Backup of {$site->domain} failed'; FAILED=1; }\n"
+                    [$script, $target, $dumps] = app(BackupManager::class)->websiteBackupScript($site, (bool) ($p['databases'] ?? true), array_filter(array_map('trim', explode(',', (string) ($p['exclude'] ?? '')))), self::STAMP);
+                    $push = self::pushLine($p, $job, $target, 'site', $site->domain);
+                    foreach ($dumps as $dump) {
+                        $push .= self::pushLine($p, $job, $dump['file'], 'database', $dump['engine'].'/'.$dump['name']);
+                    }
+                    $out .= "echo '==> {$site->domain}'\n(\n{$script}\n)\n"
+                        ."if [ \$? -eq 0 ]; then\n".($push ?: "  :\n")."else\n  echo 'Backup of {$site->domain} failed'; FAILED=1\nfi\n"
                         .self::retention(Shell::arg($backup.'/site/'.$site->domain.'_').'*.tar.gz', $keep)."\n";
                 }
 
                 return $out ? "FAILED=0\n{$out}exit \$FAILED" : "echo 'No websites to back up'";
             })(),
 
-            'db_backup' => (function () use ($p, $keep) {
+            'db_backup' => (function () use ($p, $keep, $job) {
                 $query = MysqlDatabase::query()->whereNull('server_id')->whereIn('engine', ['mysql', 'pgsql', 'mongodb']);
                 if (($p['engine'] ?? 'all') !== 'all') {
                     $query->where('engine', $p['engine']);
@@ -232,7 +257,9 @@ class CronManager
                 try {
                     foreach ($query->orderBy('engine')->orderBy('name')->get() as $db) {
                         $engine = Engines::get($db->engine);
-                        $out .= "echo '==> {$db->engine} {$db->name}'\n(\n".$engine->scheduledBackupScript($db->name)."\n)\n[ \$? -eq 0 ] || { echo 'Backup of {$db->name} failed'; FAILED=1; }\n"
+                        $push = self::pushLine($p, $job, $engine->newBackupFile($db->name), 'database', $db->engine.'/'.$db->name);
+                        $out .= "echo '==> {$db->engine} {$db->name}'\n(\n".$engine->scheduledBackupScript($db->name)."\n)\n"
+                            ."if [ \$? -eq 0 ]; then\n".($push ?: "  :\n")."else\n  echo 'Backup of {$db->name} failed'; FAILED=1\nfi\n"
                             .self::retention(Shell::arg($engine->backupDir().'/'.$db->name.'_').'*.'.$engine->dumpExtension(), $keep)."\n";
                     }
                 } finally {
@@ -242,7 +269,7 @@ class CronManager
                 return $out ? "FAILED=0\n{$out}exit \$FAILED" : "echo 'No local databases to back up'";
             })(),
 
-            'path_backup' => (function () use ($p, $keep, $backup) {
+            'path_backup' => (function () use ($p, $keep, $backup, $job) {
                 $path = FileManager::normalize((string) ($p['path'] ?? ''));
                 $label = preg_replace('/[^a-zA-Z0-9_.-]+/', '_', basename($path)) ?: 'backup';
                 $excludes = '';
@@ -252,11 +279,14 @@ class CronManager
                     }
                 }
                 $target = $backup.'/path/'.$label.'_'.self::STAMP.'.tar.gz';
+                $push = self::pushLine($p, $job, $target, 'path', $label);
 
-                return 'mkdir -p '.Shell::arg($backup.'/path')."\n"
-                    .'tar -czf '.Shell::arg($target).$excludes.' -C '.Shell::arg(dirname($path)).' '.Shell::arg(basename($path))."\n"
+                return "FAILED=0\n".'mkdir -p '.Shell::arg($backup.'/path')."\n"
+                    .'tar -czf '.Shell::arg($target).$excludes.' -C '.Shell::arg(dirname($path)).' '.Shell::arg(basename($path))." || exit 1\n"
                     .'ls -lh '.Shell::arg($target)."\n"
-                    .self::retention(Shell::arg($backup.'/path/'.$label.'_').'*.tar.gz', $keep);
+                    .$push
+                    .self::retention(Shell::arg($backup.'/path/'.$label.'_').'*.tar.gz', $keep)."\n"
+                    .'exit $FAILED';
             })(),
 
             'log_cut' => (function () use ($p, $keep) {

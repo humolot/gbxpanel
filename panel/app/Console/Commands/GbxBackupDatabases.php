@@ -3,9 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\ActivityLog;
+use App\Models\BackupStorage;
 use App\Models\DatabaseRecycle;
 use App\Models\MysqlDatabase;
 use App\Models\Setting;
+use App\Services\Backup\TransferManager;
 use App\Services\Databases\Engines;
 use App\Services\Databases\SqlServerEngine;
 use App\Services\Shell;
@@ -46,6 +48,7 @@ class GbxBackupDatabases extends Command
                 foreach (array_slice($engine->backups($record->name), $keep) as $old) {
                     Shell::run('rm -f '.Shell::arg($engine->backupPath($old['name'])));
                 }
+                $this->upload($engine, $record);
             } else {
                 $failed[] = "{$record->engine} {$record->name}: ".$result->message();
                 $this->error(end($failed));
@@ -56,6 +59,27 @@ class GbxBackupDatabases extends Command
         $this->info("{$ok} database(s) backed up, keeping the last {$keep} of each.");
 
         return $failed ? self::FAILURE : self::SUCCESS;
+    }
+
+    /** Send the dump that was just written to the storage chosen in Databases > Automatic backup. */
+    protected function upload(\App\Services\Databases\DatabaseEngine $engine, MysqlDatabase $record): void
+    {
+        $storage = BackupStorage::query()->where('is_active', true)->find((int) Setting::get('db_backup_storage', 0));
+        $newest = $storage && ! ($engine instanceof SqlServerEngine) ? ($engine->backups($record->name)[0]['name'] ?? null) : null;
+        if (! $newest) {
+            return;
+        }
+        try {
+            $transfers = app(TransferManager::class);
+            $transfer = $transfers->queueUpload($storage, $engine->backupPath($newest), 'database', $record->engine.'/'.$record->name, [
+                'delete_local' => (bool) Setting::get('db_backup_storage_move', false),
+                'keep' => (int) Setting::get('db_backup_remote_keep', 30),
+            ]);
+            $transfers->launch($transfer);
+            $this->line("  Upload of {$newest} to {$storage->name} started");
+        } catch (\Throwable $e) {
+            $this->error("  Upload of {$newest} not started: ".$e->getMessage());
+        }
     }
 
     protected function purgeRecycle(): void

@@ -320,6 +320,33 @@
                     <div class="row g-3">
                         <div class="col-6"><label class="form-label">Time</label><input type="time" name="time" class="form-control" value="{{ $autoBackup['time'] }}"></div>
                         <div class="col-6"><label class="form-label">Keep copies</label><input type="number" name="keep" class="form-control" min="1" max="90" value="{{ $autoBackup['keep'] }}"></div>
+                        <div class="col-12">
+                            <label class="form-label">Send to</label>
+                            <select name="storage" class="form-select" id="abStorage">
+                                <option value="0">This server only</option>
+                                @foreach ($autoBackup['storages'] as $storage)
+                                    <option value="{{ $storage->id }}" @selected($autoBackup['storage'] === $storage->id)>{{ $storage->name }}</option>
+                                @endforeach
+                            </select>
+                            @if ($autoBackup['storages']->isEmpty())
+                                <div class="form-text"><a href="{{ route('backup.index', ['tab' => 'storage']) }}">Add a storage</a> to keep a copy of the dumps off this server.</div>
+                            @endif
+                        </div>
+                        <div class="col-6 ab-remote" @if (! $autoBackup['storage']) hidden @endif>
+                            <label class="form-label">Copies at the destination</label>
+                            <input type="number" name="remote_keep" class="form-control" min="1" max="365" value="{{ $autoBackup['remote_keep'] }}">
+                        </div>
+                        <div class="col-6 ab-remote d-flex align-items-end" @if (! $autoBackup['storage']) hidden @endif>
+                            @once
+                                @push('scripts')
+                                    <script>$(document).on('change', '#abStorage', function () { $('.ab-remote').prop('hidden', this.value === '0'); });</script>
+                                @endpush
+                            @endonce
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="storage_move" id="abMove" @checked($autoBackup['storage_move'])>
+                                <label class="form-check-label" for="abMove">Delete the local dump after the upload</label>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-text mt-2">Applies to MySQL, PostgreSQL, MongoDB and the local SQL Server container. Older copies of each database are deleted. Files are stored in {{ $db->backupRoot() }}.</div>
                 </div>

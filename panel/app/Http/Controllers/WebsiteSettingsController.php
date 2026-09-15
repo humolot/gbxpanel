@@ -621,7 +621,17 @@ class WebsiteSettingsController extends Controller
 
     public function backupCreate(Request $request, Website $website, BackupManager $backups)
     {
-        return $this->task($backups->backupWebsite($website, $request->boolean('databases', true)), 'Backup started');
+        $data = $request->validate(['storage_id' => ['nullable', 'integer'], 'delete_local' => ['nullable', 'boolean']]);
+        $upload = [];
+        if (! empty($data['storage_id'])) {
+            $storage = \App\Models\BackupStorage::query()->where('is_active', true)->find((int) $data['storage_id']);
+            if (! $storage) {
+                return $this->fail('Choose an enabled storage.');
+            }
+            $upload = ['storage_id' => $storage->id, 'delete_local' => $request->boolean('delete_local'), 'keep' => 30];
+        }
+
+        return $this->task($backups->backupWebsite($website, $request->boolean('databases', true), [], $upload), $upload ? 'Backup started; it is uploaded when it finishes.' : 'Backup started');
     }
 
     protected function siteBackup(Website $site, BackupManager $backups, string $file): string

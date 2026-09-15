@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BackupStorage;
 use App\Models\CronJob;
 use App\Models\CronScript;
 use App\Models\MysqlDatabase;
@@ -41,6 +42,7 @@ class CronController extends Controller
             'users' => $this->cron->users(),
             'websites' => Website::query()->orderBy('domain')->get(['id', 'domain']),
             'databases' => MysqlDatabase::query()->whereNull('server_id')->whereIn('engine', ['mysql', 'pgsql', 'mongodb'])->orderBy('engine')->orderBy('name')->get(['id', 'engine', 'name']),
+            'storages' => BackupStorage::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type']),
             'forbidden' => 'shutdown, halt, poweroff, init 0, mkfs, passwd, chpasswd and --stdin',
         ]);
     }
@@ -100,6 +102,26 @@ class CronController extends Controller
         ];
     }
 
+    /** Destination of a scheduled backup: local disk only, or a storage with its own retention. */
+    protected function storageParams(Request $request): array
+    {
+        $data = $request->validate([
+            'storage' => ['nullable', 'integer'],
+            'storage_move' => ['nullable', 'boolean'],
+            'remote_keep' => ['nullable', 'integer', 'min:1', 'max:365'],
+        ]);
+        $storage = (int) ($data['storage'] ?? 0);
+        if ($storage > 0 && ! BackupStorage::query()->whereKey($storage)->exists()) {
+            throw ValidationException::withMessages(['storage' => 'Storage not found.']);
+        }
+
+        return [
+            'storage' => $storage ?: '',
+            'storage_move' => $storage > 0 && $request->boolean('storage_move'),
+            'remote_keep' => (int) ($data['remote_keep'] ?? 30),
+        ];
+    }
+
     /** @return array{0: string, 1: array} command column and type parameters */
     protected function typeData(Request $request, string $type): array
     {
@@ -121,7 +143,7 @@ class CronController extends Controller
 
             case 'site_backup':
                 $p = $request->validate(['website' => $website, 'databases' => ['nullable', 'boolean'], 'exclude' => ['nullable', 'string', 'max:500']]);
-                $p = ['website' => $p['website'] ?? 'all', 'databases' => $request->boolean('databases', true), 'exclude' => (string) ($p['exclude'] ?? '')];
+                $p = ['website' => $p['website'] ?? 'all', 'databases' => $request->boolean('databases', true), 'exclude' => (string) ($p['exclude'] ?? '')] + $this->storageParams($request);
 
                 return ['Backup website '.($p['website'] === 'all' ? 'all' : Website::query()->find($p['website'])->domain), $p];
 
@@ -134,7 +156,7 @@ class CronController extends Controller
                         }
                     }],
                 ]);
-                $p = ['engine' => $p['engine'] ?? 'all', 'database' => $p['database'] ?? 'all'];
+                $p = ['engine' => $p['engine'] ?? 'all', 'database' => $p['database'] ?? 'all'] + $this->storageParams($request);
 
                 return ['Backup database '.($p['database'] === 'all' ? $p['engine'] : MysqlDatabase::query()->find($p['database'])->name), $p];
 
@@ -145,7 +167,7 @@ class CronController extends Controller
                     throw ValidationException::withMessages(['path' => 'This directory cannot be archived.']);
                 }
 
-                return ['Backup directory '.$p['path'], ['path' => $p['path'], 'exclude' => (string) ($p['exclude'] ?? '')]];
+                return ['Backup directory '.$p['path'], ['path' => $p['path'], 'exclude' => (string) ($p['exclude'] ?? '')] + $this->storageParams($request)];
 
             case 'log_cut':
                 $p = $request->validate(['website' => $website]);

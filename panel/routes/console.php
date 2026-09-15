@@ -22,3 +22,7 @@ Schedule::command('gbx:expire-websites')->dailyAt('00:05');
 Schedule::command('gbx:backup-databases --scheduled')->dailyAt(Setting::get('db_backup_time', '02:30'))->withoutOverlapping()
     ->when(fn () => (bool) Setting::get('db_backup_enabled', false));
 Schedule::command('gbx:backup-databases --purge-recycle')->dailyAt('04:10');
+
+// Backup storages: interrupted transfers, transfer history and the space used at every destination
+Schedule::command('gbx:backup-housekeeping')->hourlyAt(12);
+Schedule::command('gbx:backup-housekeeping --usage')->dailyAt('05:40');

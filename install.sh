@@ -219,7 +219,27 @@ if [ ! -x /usr/local/bin/composer ]; then
     rm -f /tmp/composer-setup.php
 fi
 apt_install certbot
-ok "composer $(COMPOSER_ALLOW_SUPERUSER=1 composer --version 2>/dev/null | awk '{print $3}'), $(certbot --version 2>&1)"
+# rclone sends backups to object storage, Google Drive, FTP, SFTP or WebDAV (Backup > Storage)
+if ! command -v rclone >/dev/null 2>&1; then
+    RCLONE_ARCH=""
+    case "$(uname -m)" in x86_64) RCLONE_ARCH=amd64 ;; aarch64|arm64) RCLONE_ARCH=arm64 ;; armv7l) RCLONE_ARCH=arm-v7 ;; esac
+    RCLONE_VERSION="$(curl -fsSL https://downloads.rclone.org/version.txt 2>/dev/null | awk '{print $2}')"
+    if [ -n "$RCLONE_ARCH" ] && [ -n "$RCLONE_VERSION" ]; then
+        RCLONE_FILE="rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip"
+        RCLONE_TMP="$(mktemp -d)"
+        if run curl -fsSL -o "$RCLONE_TMP/$RCLONE_FILE" "https://downloads.rclone.org/${RCLONE_VERSION}/${RCLONE_FILE}" &&
+           run curl -fsSL -o "$RCLONE_TMP/SHA256SUMS" "https://downloads.rclone.org/${RCLONE_VERSION}/SHA256SUMS" &&
+           (cd "$RCLONE_TMP" && grep " ${RCLONE_FILE}\$" SHA256SUMS | sha256sum -c - >>"$LOG_FILE" 2>&1) &&
+           run unzip -q -o "$RCLONE_TMP/$RCLONE_FILE" -d "$RCLONE_TMP"; then
+            install -m 0755 "$RCLONE_TMP/rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}/rclone" /usr/bin/rclone
+            mkdir -p /root/.gbx-rclone && chmod 700 /root/.gbx-rclone
+        else
+            info "rclone could not be downloaded; install it later from the Backup page"
+        fi
+        rm -rf "$RCLONE_TMP"
+    fi
+fi
+ok "composer $(COMPOSER_ALLOW_SUPERUSER=1 composer --version 2>/dev/null | awk '{print $3}'), $(certbot --version 2>&1)$(command -v rclone >/dev/null 2>&1 && echo ", $(rclone version | head -1)")"
 
 # ------------------------------------------------------------------ 5. users & directories
 step "Preparing users and directories"

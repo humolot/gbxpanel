@@ -16,11 +16,44 @@ use App\Services\Databases\QdrantManager;
  */
 class TaskHooks
 {
+    /** Queue one transfer per file of a finished backup task. */
+    protected static function uploadBackup(Task $task, array $upload): void
+    {
+        $storage = \App\Models\BackupStorage::query()->where('is_active', true)->find((int) $upload['storage_id']);
+        if (! $storage) {
+            file_put_contents($task->logFile(), "\n[warning] The storage of this backup is disabled or was removed; the backup stays on this server.\n", FILE_APPEND);
+
+            return;
+        }
+        $transfers = app(\App\Services\Backup\TransferManager::class);
+        foreach ($upload['files'] ?? [] as $item) {
+            if (empty($item['file']) || ! (Shell::simulating() || Shell::fileExists($item['file']))) {
+                continue;
+            }
+            try {
+                $transfer = $transfers->queueUpload($storage, $item['file'], (string) ($item['category'] ?? 'other'), $item['label'] ?? null, [
+                    'delete_local' => (bool) ($upload['delete_local'] ?? false),
+                    'keep' => $upload['keep'] ?? null,
+                    'task_id' => $task->id,
+                ]);
+                $transfers->launch($transfer);
+                file_put_contents($task->logFile(), "\n==> Upload of ".basename($item['file']).' to '.$storage->name." started (Backup > Transfers)\n", FILE_APPEND);
+            } catch (\Throwable $e) {
+                file_put_contents($task->logFile(), "\n[error] Upload not started: ".$e->getMessage()."\n", FILE_APPEND);
+            }
+        }
+    }
+
     public static function finished(Task $task): void
     {
         $meta = $task->meta ?? [];
 
         try {
+            // a backup that was asked to go to a storage: send the archive and its database dumps
+            if ($task->status === 'success' && ! empty($meta['upload']['storage_id'])) {
+                self::uploadBackup($task, (array) $meta['upload']);
+            }
+
             if (($meta['on_success'] ?? null) === 'ssl_issued' && $task->status === 'success' && isset($meta['website_id'])) {
                 $site = Website::query()->find($meta['website_id']);
                 if ($site) {

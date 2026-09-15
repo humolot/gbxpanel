@@ -99,6 +99,32 @@ ensure_self_signed() {
     chmod 600 "$SELF_KEY"
 }
 
+# rclone moves backups to the storages configured in Backup > Storage (object storage, Google
+# Drive, FTP, SFTP, WebDAV). Installed from the official release, checked against its SHA256SUMS.
+ensure_rclone() {
+    command -v rclone >/dev/null 2>&1 && return 0
+    local arch version file tmp
+    case "$(uname -m)" in
+        x86_64) arch=amd64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        armv7l) arch=arm-v7 ;;
+        *) echo "rclone: unsupported architecture $(uname -m), remote backups stay unavailable" >&2; return 0 ;;
+    esac
+    version="$(curl -fsSL https://downloads.rclone.org/version.txt 2>/dev/null | awk '{print $2}')"
+    case "$version" in v[0-9]*) ;; *) echo "rclone: could not read the current version, skipping" >&2; return 0 ;; esac
+    file="rclone-${version}-linux-${arch}.zip"
+    tmp="$(mktemp -d)"
+    if curl -fsSL -o "$tmp/$file" "https://downloads.rclone.org/${version}/${file}" &&
+       curl -fsSL -o "$tmp/SHA256SUMS" "https://downloads.rclone.org/${version}/SHA256SUMS" &&
+       (cd "$tmp" && grep " ${file}\$" SHA256SUMS | sha256sum -c - >/dev/null 2>&1) &&
+       unzip -q -o "$tmp/$file" -d "$tmp"; then
+        install -m 0755 "$tmp/rclone-${version}-linux-${arch}/rclone" /usr/bin/rclone
+        mkdir -p /root/.gbx-rclone && chmod 700 /root/.gbx-rclone
+    else
+        echo "rclone: download failed, remote backups stay unavailable until 'gbx update' runs again" >&2
+    fi
+    rm -rf "$tmp"
+}
 # Dedicated PHP-FPM master for the panel.
 # The distribution php8.4-fpm.service runs with ProtectSystem=full, which makes /usr and /etc
 # read-only for PHP and every command it starts: the panel (in /usr/local) could not write its
@@ -554,6 +580,7 @@ cmd_update() {
     chown -R "$GBX_USER:$GBX_USER" "$PANEL_DIR"
     (cd "$PANEL_DIR" && runuser -u "$GBX_USER" -- env HOME="$GBX_ROOT" COMPOSER_HOME="$GBX_ROOT/.composer" "$PHP_BIN" /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --no-progress) || die "composer install failed"
     artisan migrate --force
+    ensure_rclone
     install -m 700 "$(dirname "$src")/scripts/gbx-terminal" "$TERM_BIN"
     rm -rf "$tmp"
     cmd_fix >/dev/null

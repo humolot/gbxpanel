@@ -91,7 +91,7 @@
                             </td>
                             <td><span class="badge badge-soft">{{ \App\Services\CronManager::TYPES[$job->type] ?? $job->type }}</span></td>
                             <td>{{ $job->keep ? $job->keep : '-' }}</td>
-                            <td>{{ in_array($job->type, ['site_backup', 'db_backup', 'path_backup'], true) ? 'Local disk' : '-' }}</td>
+                            <td>{{ in_array($job->type, ['site_backup', 'db_backup', 'path_backup'], true) ? ($storages->firstWhere('id', (int) ($job->params['storage'] ?? 0))?->name ?? 'Local disk') : '-' }}</td>
                             <td class="text-nowrap">{!! $lastRun($job) !!}</td>
                             <td class="text-end text-nowrap db-ops">
                                 @if ($canWrite)
@@ -386,6 +386,41 @@
                         <div class="cron-row">
                             <label>Exclude</label>
                             <div><input type="text" name="exclude" class="form-control font-mono" placeholder="node_modules, *.log, storage/cache"><div class="form-text">Comma separated patterns</div></div>
+                        </div>
+                    </div>
+                    <div data-section="site_backup db_backup path_backup">
+                        <div class="cron-row">
+                            <label>Backup to</label>
+                            <div>
+                                <select name="storage" class="form-select" id="cronStorage">
+                                    <option value="">Local disk only</option>
+                                    @foreach ($storages as $storage)
+                                        <option value="{{ $storage->id }}">{{ $storage->name }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">
+                                    @if ($storages->isEmpty())
+                                        <a href="{{ route('backup.index', ['tab' => 'storage']) }}">Add a storage</a> to send these backups to object storage, Google Drive, FTP or SFTP.
+                                    @else
+                                        The backup is made on this server first and then sent to the destination. Large archives are sent in parts and repeated transfers continue where they stopped.
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-section="site_backup db_backup path_backup" class="cron-remote" hidden>
+                        <div class="cron-row">
+                            <label>Local copy</label>
+                            <div>
+                                <select name="storage_move" class="form-select">
+                                    <option value="0">Keep it on this server</option>
+                                    <option value="1">Delete it after a successful upload</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="cron-row">
+                            <label>Remote copies</label>
+                            <div class="d-flex align-items-center gap-2"><input type="number" name="remote_keep" class="form-control cron-num" min="1" max="365" value="30"> <span class="cell-sub">newest copies are kept at the destination</span></div>
                         </div>
                     </div>
                     <div data-section="site_backup db_backup path_backup log_cut">
