@@ -175,17 +175,72 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
     Route::delete('/databases/{database}', [Controllers\DatabaseController::class, 'destroy'])->name('databases.destroy');
 
     // Docker
-    Route::get('/docker', [Controllers\DockerController::class, 'index'])->name('docker.index');
-    Route::get('/docker/data', [Controllers\DockerController::class, 'data'])->name('docker.data');
-    Route::post('/docker/containers/action', [Controllers\DockerController::class, 'action'])->name('docker.action');
-    Route::get('/docker/containers/logs', [Controllers\DockerController::class, 'logs'])->name('docker.logs');
-    Route::get('/docker/containers/inspect', [Controllers\DockerController::class, 'inspect'])->name('docker.inspect');
-    Route::post('/docker/containers', [Controllers\DockerController::class, 'create'])->name('docker.create');
-    Route::post('/docker/images/pull', [Controllers\DockerController::class, 'pull'])->name('docker.pull');
-    Route::post('/docker/images/remove', [Controllers\DockerController::class, 'removeImage'])->name('docker.images.remove');
-    Route::post('/docker/volumes/remove', [Controllers\DockerController::class, 'removeVolume'])->name('docker.volumes.remove');
-    Route::post('/docker/prune', [Controllers\DockerController::class, 'prune'])->name('docker.prune');
-    Route::post('/docker/compose', [Controllers\DockerController::class, 'compose'])->name('docker.compose');
+    Route::prefix('docker')->name('docker.')->group(function () {
+        Route::get('/', [Controllers\DockerController::class, 'index'])->name('index');
+        Route::get('/overview', [Controllers\DockerController::class, 'overview'])->name('overview');
+        Route::get('/stats', [Controllers\DockerController::class, 'stats'])->name('stats');
+
+        Route::get('/containers', [Controllers\DockerController::class, 'containers'])->name('containers');
+        Route::get('/containers/detail/{ref}', [Controllers\DockerController::class, 'container'])->name('containers.show');
+        Route::post('/containers', [Controllers\DockerController::class, 'create'])->name('create');
+        Route::post('/containers/action', [Controllers\DockerController::class, 'action'])->name('action');
+        Route::post('/containers/bulk', [Controllers\DockerController::class, 'bulk'])->name('containers.bulk');
+        Route::post('/containers/rename', [Controllers\DockerController::class, 'rename'])->name('containers.rename');
+        Route::post('/containers/update', [Controllers\DockerController::class, 'update'])->name('containers.update');
+        Route::post('/containers/commit', [Controllers\DockerController::class, 'commit'])->name('containers.commit');
+        Route::get('/containers/logs', [Controllers\DockerController::class, 'logs'])->name('logs');
+        Route::get('/containers/log-sizes', [Controllers\DockerController::class, 'logSizes'])->name('containers.logsizes');
+        Route::post('/containers/clear-logs', [Controllers\DockerController::class, 'clearLogs'])->name('containers.clearlogs');
+        Route::get('/containers/inspect', [Controllers\DockerController::class, 'inspect'])->name('inspect');
+        Route::post('/containers/prune', [Controllers\DockerController::class, 'pruneContainers'])->name('containers.prune');
+        Route::post('/notes', [Controllers\DockerController::class, 'note'])->name('note');
+
+        Route::get('/images', [Controllers\DockerController::class, 'images'])->name('images');
+        Route::post('/images/pull', [Controllers\DockerController::class, 'pull'])->name('pull');
+        Route::post('/images/import', [Controllers\DockerController::class, 'import'])->name('images.import');
+        Route::post('/images/build', [Controllers\DockerController::class, 'build'])->name('images.build');
+        Route::post('/images/push', [Controllers\DockerController::class, 'push'])->name('images.push');
+        Route::post('/images/export', [Controllers\DockerController::class, 'export'])->name('images.export');
+        Route::post('/images/remove', [Controllers\DockerController::class, 'removeImage'])->name('images.remove');
+        Route::post('/images/bulk-remove', [Controllers\DockerController::class, 'bulkImages'])->name('images.bulk');
+        Route::post('/images/prune', [Controllers\DockerController::class, 'pruneImages'])->name('images.prune');
+
+        Route::get('/networks', [Controllers\DockerController::class, 'networks'])->name('networks');
+        Route::post('/networks', [Controllers\DockerController::class, 'networkStore'])->name('networks.store');
+        Route::post('/networks/remove', [Controllers\DockerController::class, 'networkDestroy'])->name('networks.remove');
+        Route::post('/networks/prune', [Controllers\DockerController::class, 'pruneNetworks'])->name('networks.prune');
+
+        Route::get('/volumes', [Controllers\DockerController::class, 'volumes'])->name('volumes');
+        Route::post('/volumes', [Controllers\DockerController::class, 'volumeStore'])->name('volumes.store');
+        Route::post('/volumes/remove', [Controllers\DockerController::class, 'volumeDestroy'])->name('volumes.remove');
+        Route::post('/volumes/prune', [Controllers\DockerController::class, 'pruneVolumes'])->name('volumes.prune');
+
+        Route::get('/compose', [Controllers\DockerComposeController::class, 'index'])->name('compose.index');
+        Route::post('/compose', [Controllers\DockerComposeController::class, 'store'])->name('compose.store');
+        Route::post('/compose/remove', [Controllers\DockerComposeController::class, 'destroy'])->name('compose.remove');
+        Route::get('/compose/templates', [Controllers\DockerComposeController::class, 'templates'])->name('compose.templates');
+        Route::post('/compose/templates', [Controllers\DockerComposeController::class, 'templateStore'])->name('compose.templates.store');
+        Route::put('/compose/templates/{template}', [Controllers\DockerComposeController::class, 'templateUpdate'])->name('compose.templates.update');
+        Route::delete('/compose/templates/{template}', [Controllers\DockerComposeController::class, 'templateDestroy'])->name('compose.templates.destroy');
+        Route::get('/compose/{name}', [Controllers\DockerComposeController::class, 'show'])->name('compose.show');
+        Route::get('/compose/{name}/logs', [Controllers\DockerComposeController::class, 'logs'])->name('compose.logs');
+        Route::post('/compose/{name}/action', [Controllers\DockerComposeController::class, 'action'])->name('compose.action');
+        Route::post('/compose/{name}/file', [Controllers\DockerComposeController::class, 'saveFile'])->name('compose.file');
+
+        Route::get('/apps', [Controllers\DockerStoreController::class, 'apps'])->name('apps');
+        Route::post('/apps/{slug}/install', [Controllers\DockerStoreController::class, 'install'])->name('apps.install');
+        Route::get('/hub/search', [Controllers\DockerStoreController::class, 'hubSearch'])->name('hub.search');
+        Route::get('/hub/tags', [Controllers\DockerStoreController::class, 'hubTags'])->name('hub.tags');
+
+        Route::get('/registries', [Controllers\DockerSettingsController::class, 'registries'])->name('registries');
+        Route::post('/registries', [Controllers\DockerSettingsController::class, 'registryStore'])->name('registries.store');
+        Route::put('/registries/{registry}', [Controllers\DockerSettingsController::class, 'registryUpdate'])->name('registries.update');
+        Route::delete('/registries/{registry}', [Controllers\DockerSettingsController::class, 'registryDestroy'])->name('registries.destroy');
+        Route::post('/registries/{registry}/test', [Controllers\DockerSettingsController::class, 'registryTest'])->name('registries.test');
+        Route::get('/settings', [Controllers\DockerSettingsController::class, 'settings'])->name('settings');
+        Route::post('/settings', [Controllers\DockerSettingsController::class, 'saveSettings'])->name('settings.save');
+        Route::post('/service', [Controllers\DockerSettingsController::class, 'service'])->name('service');
+    });
 
     // Security
     Route::get('/security', [Controllers\SecurityController::class, 'index'])->name('security.index');

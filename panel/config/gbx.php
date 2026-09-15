@@ -76,6 +76,11 @@ return [
     // Automatic database backups (Databases > Auto backup)
     'database_backup_keep' => 7,
 
+    // Docker compose projects created from the panel and One-Click Install
+    'docker' => [
+        'projects' => env('GBX_DOCKER_PROJECTS', '/www/docker'),
+    ],
+
     // User that owns website files and runs PHP-FPM pools for sites.
     'web_user' => env('GBX_WEB_USER', 'www-data'),
 
