@@ -70,7 +70,7 @@ class PanelManager
 
     public function restartPanel(): ShellResult
     {
-        return $this->delayed('systemctl reload apache2; systemctl restart php8.4-fpm; supervisorctl restart gbxpanel-worker:*', 2);
+        return $this->delayed('systemctl restart gbxpanel-fpm; systemctl reload apache2; supervisorctl restart gbxpanel-worker:*', 2);
     }
 
     public function setHostname(string $hostname): ShellResult

@@ -98,6 +98,9 @@ class SoftwareManager
         if (empty($item['uninstall'])) {
             throw new \InvalidArgumentException($item['name'].' is a core component and cannot be removed.');
         }
+        if ($key === 'php' && $version === '8.4') {
+            throw new \InvalidArgumentException('PHP 8.4 runs GBX Panel (gbxpanel-fpm) and cannot be removed.');
+        }
         Cache::forget('gbx.software');
 
         return TaskRunner::dispatch('Uninstall '.$item['name'].($version ? ' '.$version : ''), $this->fill($item['uninstall'], $version), 'software', ['package' => $key, 'version' => $version]);

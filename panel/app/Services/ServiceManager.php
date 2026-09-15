@@ -7,6 +7,7 @@ class ServiceManager
     /** Services shown on the Services page when present on the system. */
     public const KNOWN = [
         'apache2' => 'Apache HTTP Server',
+        'gbxpanel-fpm' => 'GBX Panel PHP-FPM',
         'mysql' => 'MySQL Server',
         'mariadb' => 'MariaDB Server',
         'php7.4-fpm' => 'PHP 7.4 FPM', 'php8.0-fpm' => 'PHP 8.0 FPM', 'php8.1-fpm' => 'PHP 8.1 FPM',

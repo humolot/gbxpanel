@@ -27,7 +27,7 @@ class ServiceController extends Controller
             'action' => ['required', 'in:start,stop,restart,reload,enable,disable'],
         ]);
 
-        if ($data['action'] === 'stop' && in_array($data['service'], ['apache2', 'php8.4-fpm', 'ssh', 'supervisor'], true)) {
+        if ($data['action'] === 'stop' && in_array($data['service'], ['apache2', 'gbxpanel-fpm', 'ssh', 'supervisor'], true)) {
             return $this->fail("Stopping {$data['service']} would make the panel or SSH unreachable. Use restart instead.");
         }
 

@@ -26,8 +26,13 @@ a2dissite -q 000-gbxpanel >/dev/null 2>&1
 rm -f /etc/apache2/sites-available/000-gbxpanel.conf
 systemctl reload apache2 >/dev/null 2>&1
 
-rm -f "/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf"
-systemctl restart "php${PHP_V}-fpm" >/dev/null 2>&1
+systemctl disable --now gbxpanel-fpm >/dev/null 2>&1
+rm -f /etc/systemd/system/gbxpanel-fpm.service
+systemctl daemon-reload >/dev/null 2>&1
+if [ -f "/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf" ]; then
+    rm -f "/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf"
+    systemctl restart "php${PHP_V}-fpm" >/dev/null 2>&1
+fi
 
 rm -f /etc/cron.d/gbxpanel-scheduler /etc/sudoers.d/gbxpanel /etc/logrotate.d/gbxpanel /usr/bin/gbx
 echo "Cron jobs created in the panel are kept in /etc/cron.d/gbxpanel (delete the file to remove them)."

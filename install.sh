@@ -368,38 +368,13 @@ chmod 440 /etc/sudoers.d/gbxpanel
 visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1 || { rm -f /etc/sudoers.d/gbxpanel; fail "invalid sudoers file"; }
 ok "sudo rules installed for ${GBX_USER}"
 
-# ------------------------------------------------------------------ 9. PHP-FPM pool
-step "Configuring PHP-FPM pool"
-cat >/etc/php/${PHP_V}/fpm/pool.d/gbxpanel.conf <<EOF
-; GBX Panel pool - managed by the installer
-[gbxpanel]
-user = ${GBX_USER}
-group = ${GBX_USER}
-listen = /run/php/gbxpanel.sock
-listen.owner = www-data
-listen.group = www-data
-listen.mode = 0660
-
-pm = ondemand
-pm.max_children = 12
-pm.process_idle_timeout = 30s
-pm.max_requests = 500
-request_terminate_timeout = 3600
-
-php_admin_value[memory_limit] = 512M
-php_admin_value[upload_max_filesize] = 2048M
-php_admin_value[post_max_size] = 2048M
-php_admin_value[max_execution_time] = 3600
-php_admin_value[max_input_time] = 3600
-php_admin_value[error_log] = ${GBX_ROOT}/logs/php-error.log
-php_admin_flag[log_errors] = on
-php_admin_value[upload_tmp_dir] = ${GBX_ROOT}/tmp
-php_admin_value[session.save_path] = ${GBX_ROOT}/tmp
-EOF
-run php-fpm${PHP_V} -t
-run systemctl restart php${PHP_V}-fpm
-ok "pool gbxpanel listening on /run/php/gbxpanel.sock"
-
+# ------------------------------------------------------------------ 9. PHP-FPM
+# The panel gets its own PHP-FPM master (gbxpanel-fpm.service). The distribution
+# php8.4-fpm.service uses ProtectSystem=full, which makes /usr and /etc read-only
+# for PHP and for every command it starts.
+step "Configuring the panel PHP-FPM service"
+"$GBX_ROOT/bin/gbx" fpm-service >>"$LOG_FILE" 2>&1 || fail "could not start gbxpanel-fpm (see ${LOG_FILE})"
+ok "gbxpanel-fpm listening on /run/gbxpanel/php-fpm.sock"
 # ------------------------------------------------------------------ 10. SSL + Apache vhost
 step "Configuring Apache virtual host on port ${PANEL_PORT}"
 SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
@@ -518,11 +493,17 @@ fi
 step "Checking the panel"
 sleep 1
 CHECK_HOST="${PANEL_HOST:-127.0.0.1}"
-HTTP_CODE="$(curl -k -s -o /dev/null -w "%{http_code}" --resolve "${CHECK_HOST}:${PANEL_PORT}:127.0.0.1" "${SCHEME}://${CHECK_HOST}:${PANEL_PORT}/${PANEL_ENTRY}" || true)"
-if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "200" ]; then
-    ok "panel responds (HTTP ${HTTP_CODE})"
+COOKIES="$(mktemp)"
+# follow the entrance redirect to the login page: this renders views, starts a session
+# and writes to the cache, so permission or sandbox problems show up here
+HTTP_CODE="$(curl -k -s -L -o /dev/null -w "%{http_code}" -c "$COOKIES" -b "$COOKIES" --resolve "${CHECK_HOST}:${PANEL_PORT}:127.0.0.1" "${SCHEME}://${CHECK_HOST}:${PANEL_PORT}/${PANEL_ENTRY}" || true)"
+rm -f "$COOKIES"
+if [ "$HTTP_CODE" = "200" ]; then
+    ok "login page renders (HTTP 200)"
 else
-    warn "panel returned HTTP ${HTTP_CODE:-no response}; check ${GBX_ROOT}/logs/apache-error.log and ${PANEL_DIR}/storage/logs"
+    warn "the login page returned HTTP ${HTTP_CODE:-no response}. Last errors:"
+    { tail -n 5 "$GBX_ROOT/logs/php-error.log" 2>/dev/null; ls -t "$PANEL_DIR"/storage/logs/*.log 2>/dev/null | head -1 | xargs -r tail -n 5; } | sed 's/^/    /' || true
+    warn "run 'gbx doctor' for a full diagnosis"
 fi
 
 # ------------------------------------------------------------------ 14. summary
