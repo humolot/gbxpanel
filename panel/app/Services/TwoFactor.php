@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Setting;
-use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
@@ -111,7 +111,7 @@ class TwoFactor
     }
 
     /** otpauth:// URI encoded in the QR code. */
-    public static function uri(User $user, string $secret): string
+    public static function uri(Model $user, string $secret): string
     {
         $issuer = self::issuer();
         $host = parse_url((string) config('app.url'), PHP_URL_HOST) ?: request()->getHost();
@@ -145,7 +145,7 @@ class TwoFactor
     }
 
     /** Remove a matching recovery code from the user; true when it was valid. */
-    public static function useRecoveryCode(User $user, string $code): bool
+    public static function useRecoveryCode(Model $user, string $code): bool
     {
         $hash = self::hashRecoveryCode($code);
         $codes = $user->two_factor_recovery_codes ?? [];
@@ -164,14 +164,14 @@ class TwoFactor
     /* ========================================================= trusted devices */
 
     /** Cookie value; tied to the current secret so resetting 2FA revokes every trusted browser. */
-    public static function trustToken(User $user): string
+    public static function trustToken(Model $user): string
     {
         $expires = time() + self::TRUST_DAYS * 86400;
 
         return $user->id.'|'.$expires.'|'.hash_hmac('sha256', $user->id.'|'.$expires.'|'.$user->two_factor_secret, TerminalManager::key());
     }
 
-    public static function trusted(User $user, ?string $token): bool
+    public static function trusted(Model $user, ?string $token): bool
     {
         if (! $token || ! $user->hasTwoFactor()) {
             return false;

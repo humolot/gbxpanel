@@ -20,7 +20,8 @@ class TaskRunner
             'script' => $script,
             'status' => 'queued',
             'meta' => $meta,
-            'user_id' => auth()->id(),
+            'user_id' => auth('web')->id(),
+            'client_id' => \App\Services\Clients\ClientContext::id(),
         ]);
 
         ActivityLog::record('task', 'Queued: '.$title, 'Task #'.$task->id);

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CronJob extends Model
 {
-    protected $fillable = ['name', 'type', 'schedule', 'cycles', 'command', 'params', 'run_as', 'keep', 'notes', 'is_active', 'last_run_at', 'last_status', 'last_duration'];
+    protected $fillable = ['name', 'type', 'schedule', 'cycles', 'command', 'params', 'run_as', 'keep', 'notes', 'is_active', 'last_run_at', 'last_status', 'last_duration', 'client_id'];
 
     protected $attributes = ['type' => 'shell'];
 
@@ -34,5 +34,10 @@ class CronJob extends Model
     public function isFlow(): bool
     {
         return $this->type === 'flow';
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
     }
 }

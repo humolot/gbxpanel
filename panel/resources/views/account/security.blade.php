@@ -1,4 +1,6 @@
-@extends('layouts.app')
+@extends($layout ?? 'layouts.app')
+
+@php $rp = $routePrefix ?? ''; @endphp
 
 @section('title', 'Account security')
 
@@ -45,7 +47,7 @@
                         </div>
                         <div class="d-flex flex-wrap gap-2 mt-4">
                             <button class="btn btn-outline-secondary" id="tfaNewCodes"><i class="bi bi-life-preserver"></i> New recovery codes</button>
-                            <button class="btn btn-outline-secondary" data-post="{{ route('account.2fa.forget') }}"><i class="bi bi-browser-chrome"></i> Stop trusting this browser</button>
+                            <button class="btn btn-outline-secondary" data-post="{{ route($rp.'account.2fa.forget') }}"><i class="bi bi-browser-chrome"></i> Stop trusting this browser</button>
                             @unless ($required)
                                 <button class="btn btn-outline-danger ms-auto" id="tfaDisable"><i class="bi bi-shield-x"></i> Disable</button>
                             @endunless
@@ -106,7 +108,7 @@
                     <p><strong>Recovery codes:</strong> 10 single-use codes shown when you enable it. Keep them in a password manager or printed; they sign you in when the phone is not available.</p>
                     <p><strong>Trusted browser:</strong> optional at sign-in; that browser skips the code for {{ $trustDays }} days. Disabling or re-enabling two-factor authentication revokes every trusted browser.</p>
                     <p><strong>Phone clock:</strong> codes depend on the time. If a code is refused, set the date and time of the phone to automatic.</p>
-                    <p class="mb-0"><strong>Lost access:</strong> an administrator can reset it in Accounts, or run <code>gbx 2fa-off {{ $user->username }}</code> on the server as root.</p>
+                    <p class="mb-0"><strong>Lost access:</strong> {{ $lostHint ?? '' }}@unless ($lostHint ?? null)an administrator can reset it in Accounts, or run <code>gbx 2fa-off {{ $user->username }}</code> on the server as root.@endunless</p>
                 </div>
             </div>
         </div>
@@ -144,11 +146,11 @@
 <script>
 $(function () {
     var R = {
-        setup: @json(route('account.2fa.setup')),
-        confirm: @json(route('account.2fa.confirm')),
-        recovery: @json(route('account.2fa.recovery')),
-        disable: @json(route('account.2fa.disable')),
-        home: @json(route('home'))
+        setup: @json(route($rp.'account.2fa.setup')),
+        confirm: @json(route($rp.'account.2fa.confirm')),
+        recovery: @json(route($rp.'account.2fa.recovery')),
+        disable: @json(route($rp.'account.2fa.disable')),
+        home: @json(route($rp === '' ? 'home' : 'client.home'))
     };
     var username = @json($user->username), issuer = @json(\App\Services\TwoFactor::issuer());
     var redirectAfter = @json($required && ! $enabled);

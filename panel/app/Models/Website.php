@@ -7,7 +7,7 @@ use Illuminate\Support\Arr;
 
 class Website extends Model
 {
-    protected $fillable = ['domain', 'aliases', 'root_path', 'php_version', 'proxy_target', 'status', 'ssl_enabled', 'ssl_provider', 'ssl_expires_at', 'force_https', 'expires_at', 'settings', 'notes'];
+    protected $fillable = ['domain', 'aliases', 'root_path', 'php_version', 'proxy_target', 'status', 'ssl_enabled', 'ssl_provider', 'ssl_expires_at', 'force_https', 'expires_at', 'settings', 'notes', 'client_id'];
 
     public const DEFAULT_INDEX = ['index.php', 'index.html', 'index.htm', 'default.php', 'default.html'];
 
@@ -116,5 +116,10 @@ class Website extends Model
     public function privateDir(): string
     {
         return rtrim(config('gbx.root'), '/').'/sites/'.$this->domain;
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
     }
 }

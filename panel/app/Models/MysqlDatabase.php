@@ -12,7 +12,7 @@ class MysqlDatabase extends Model
 {
     protected $table = 'databases';
 
-    protected $fillable = ['engine', 'server_id', 'name', 'username', 'password', 'host', 'charset', 'website_id', 'notes'];
+    protected $fillable = ['engine', 'server_id', 'name', 'username', 'password', 'host', 'charset', 'website_id', 'notes', 'client_id'];
 
     protected $hidden = ['password'];
 
@@ -47,5 +47,10 @@ class MysqlDatabase extends Model
     public function location(): string
     {
         return $this->server ? $this->server->label() : 'Localhost';
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
     }
 }

@@ -12,14 +12,36 @@ use Illuminate\Support\Facades\Hash;
 /** Account security: two-factor authentication of the signed-in user. */
 class TwoFactorController extends Controller
 {
+    /** Account whose two-factor authentication is managed (panel user here, client in the sub-panel). */
+    protected function account(Request $request): \Illuminate\Database\Eloquent\Model
+    {
+        return $request->user();
+    }
+
+    /** View data that differs between the panel and the client sub-panel. */
+    protected function viewContext(): array
+    {
+        return ['layout' => 'layouts.app', 'routePrefix' => '', 'required' => TwoFactor::required(), 'lostHint' => null];
+    }
+
+    protected function isRequired(): bool
+    {
+        return TwoFactor::required();
+    }
+
+    /** Sign out other sessions of the account after enabling two-factor authentication. */
+    protected function endOtherSessions(\Illuminate\Database\Eloquent\Model $account, Request $request): void
+    {
+        DB::table('sessions')->where('user_id', $account->id)->where('id', '!=', $request->session()->getId())->delete();
+    }
+
     public function show(Request $request)
     {
-        $user = $request->user();
+        $user = $this->account($request);
 
-        return view('account.security', [
+        return view('account.security', $this->viewContext() + [
             'user' => $user,
             'enabled' => $user->hasTwoFactor(),
-            'required' => TwoFactor::required(),
             'recoveryLeft' => count($user->two_factor_recovery_codes ?? []),
             'trustDays' => TwoFactor::TRUST_DAYS,
         ]);
@@ -29,13 +51,13 @@ class TwoFactorController extends Controller
     {
         $request->validate(['password' => ['required', 'string', 'max:255']]);
 
-        return Hash::check((string) $request->input('password'), $request->user()->password) ? null : $this->fail('Current password is incorrect.');
+        return Hash::check((string) $request->input('password'), $this->account($request)->password) ? null : $this->fail('Current password is incorrect.');
     }
 
     /** Step 1: a new secret kept in the session until a code from the app confirms it. */
     public function setup(Request $request)
     {
-        if ($request->user()->hasTwoFactor()) {
+        if ($this->account($request)->hasTwoFactor()) {
             return $this->fail('Two-factor authentication is already enabled. Disable it first to use another device.');
         }
         if ($error = $this->checkPassword($request)) {
@@ -46,9 +68,9 @@ class TwoFactorController extends Controller
 
         return $this->ok('ok', [
             'secret' => trim(chunk_split($secret, 4, ' ')),
-            'uri' => TwoFactor::uri($request->user(), $secret),
+            'uri' => TwoFactor::uri($this->account($request), $secret),
             'issuer' => TwoFactor::issuer(),
-            'account' => $request->user()->username,
+            'account' => $this->account($request)->username,
         ]);
     }
 
@@ -66,7 +88,7 @@ class TwoFactorController extends Controller
         }
 
         [$plain, $hashes] = TwoFactor::makeRecoveryCodes();
-        $user = $request->user();
+        $user = $this->account($request);
         $user->forceFill([
             'two_factor_secret' => $pending['secret'],
             'two_factor_recovery_codes' => $hashes,
@@ -76,7 +98,7 @@ class TwoFactorController extends Controller
         $request->session()->forget('gbx_2fa_setup');
 
         // other sessions of the account must sign in again with the second factor
-        DB::table('sessions')->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
+        $this->endOtherSessions($user, $request);
         $this->audit('auth', 'Enabled two-factor authentication');
 
         return $this->ok('Two-factor authentication enabled', ['recovery_codes' => $plain]);
@@ -84,14 +106,14 @@ class TwoFactorController extends Controller
 
     public function recoveryCodes(Request $request)
     {
-        if (! $request->user()->hasTwoFactor()) {
+        if (! $this->account($request)->hasTwoFactor()) {
             return $this->fail('Two-factor authentication is not enabled.');
         }
         if ($error = $this->checkPassword($request)) {
             return $error;
         }
         [$plain, $hashes] = TwoFactor::makeRecoveryCodes();
-        $request->user()->forceFill(['two_factor_recovery_codes' => $hashes])->save();
+        $this->account($request)->forceFill(['two_factor_recovery_codes' => $hashes])->save();
         $this->audit('auth', 'Generated new two-factor recovery codes');
 
         return $this->ok('New recovery codes generated. The previous codes no longer work.', ['recovery_codes' => $plain]);
@@ -99,11 +121,11 @@ class TwoFactorController extends Controller
 
     public function disable(Request $request)
     {
-        $user = $request->user();
+        $user = $this->account($request);
         if (! $user->hasTwoFactor()) {
             return $this->fail('Two-factor authentication is not enabled.');
         }
-        if (TwoFactor::required()) {
+        if ($this->isRequired()) {
             return $this->fail('Two-factor authentication is required for every account by the administrator.');
         }
         if ($error = $this->checkPassword($request)) {
@@ -147,7 +169,7 @@ class TwoFactorController extends Controller
     public function policy(Request $request)
     {
         $required = $request->boolean('required');
-        if ($required && ! $request->user()->hasTwoFactor()) {
+        if ($required && ! $this->account($request)->hasTwoFactor()) {
             return $this->fail('Enable two-factor authentication on your own account before requiring it.');
         }
         \App\Models\Setting::put('two_factor_required', $required);

@@ -11,6 +11,10 @@ Schedule::command('gbx:malware-scan --scheduled')->dailyAt('03:30')
 Schedule::command('gbx:malware-scan --scheduled')->weeklyOn(0, '04:00')
     ->when(fn () => Setting::get('av_schedule', 'off') === 'weekly');
 
+// Clients: bandwidth from the access logs, disk usage, expiration and quotas
+Schedule::command('gbx:clients-usage')->hourlyAt(7)->withoutOverlapping();
+Schedule::command('gbx:clients-usage --disk')->dailyAt('01:20')->withoutOverlapping();
+
 // Websites with an expiration date are stopped the day after it (Websites > Expiration)
 Schedule::command('gbx:expire-websites')->dailyAt('00:05');
 

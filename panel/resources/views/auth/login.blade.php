@@ -17,7 +17,7 @@
         <div class="gbx-logo" style="width:44px;height:44px;font-size:.9rem">GBX</div>
         <div>
             <h1 class="h5 mb-0 fw-semibold">{{ $title }}</h1>
-            <div class="text-muted small">Server control panel</div>
+            <div class="text-muted small">{{ $subtitle ?? 'Server control panel' }}</div>
         </div>
     </div>
 
@@ -28,7 +28,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('login.attempt') }}" autocomplete="off">
+    <form method="POST" action="{{ $action ?? route('login.attempt') }}" autocomplete="off">
         @csrf
         <div class="mb-3">
             <label class="form-label" for="username">Username</label>
@@ -61,7 +61,7 @@
     </form>
 
     <div class="text-center text-muted mt-4" style="font-size:.72rem">
-        Forgot the password? Run <code>gbx</code> on the server as root.
+        @isset($forgotHint){{ $forgotHint }}@else Forgot the password? Run <code>gbx</code> on the server as root.@endisset
     </div>
 </div>
 </body>

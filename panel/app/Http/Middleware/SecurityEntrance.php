@@ -15,6 +15,11 @@ class SecurityEntrance
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // client sub-panel: public for customers when enabled (the admin entrance and IP list do not apply)
+        if ($request->is('client', 'client/*') && \App\Services\Clients\ClientManager::portalEnabled()) {
+            return $next($request);
+        }
+
         // IP allow list (Settings > Security)
         $allowed = array_filter(array_map('trim', explode(',', (string) Setting::get('allowed_ips', ''))));
         if ($allowed && ! in_array($request->ip(), $allowed, true)) {

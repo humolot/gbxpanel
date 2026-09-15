@@ -24,6 +24,57 @@ Route::post('/logout', [Controllers\AuthController::class, 'logout'])->middlewar
 
 /*
 |--------------------------------------------------------------------------
+| Client sub-panel (hosting customers, guard "client")
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('client')->name('client.')->group(function () {
+    Route::middleware('guest:client')->group(function () {
+        Route::get('/login', [Controllers\Client\ClientAuthController::class, 'show'])->name('login');
+        Route::post('/login', [Controllers\Client\ClientAuthController::class, 'login'])->middleware('throttle:10,1')->name('login.attempt');
+        Route::get('/login/two-factor', [Controllers\Client\ClientAuthController::class, 'twoFactor'])->name('login.two-factor');
+        Route::post('/login/two-factor', [Controllers\Client\ClientAuthController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('login.two-factor.verify');
+    });
+    Route::post('/logout', [Controllers\Client\ClientAuthController::class, 'logout'])->name('logout');
+
+    Route::middleware('client.access')->group(function () {
+        Route::get('/', [Controllers\Client\ClientDashboardController::class, 'index'])->name('home');
+        Route::get('/overview', [Controllers\Client\ClientDashboardController::class, 'data'])->name('overview');
+        Route::get('/tasks', [Controllers\Client\ClientDashboardController::class, 'tasks'])->name('tasks');
+        Route::get('/tasks/{task}', [Controllers\Client\ClientDashboardController::class, 'taskShow'])->name('tasks.show');
+
+        Route::get('/websites', [Controllers\Client\ClientWebsiteController::class, 'index'])->name('websites');
+        Route::post('/websites', [Controllers\Client\ClientWebsiteController::class, 'store'])->name('websites.store');
+        Route::post('/websites/{website}/status', [Controllers\Client\ClientWebsiteController::class, 'status'])->name('websites.status');
+        Route::post('/websites/{website}/php', [Controllers\Client\ClientWebsiteController::class, 'php'])->name('websites.php');
+        Route::post('/websites/{website}/ssl', [Controllers\Client\ClientWebsiteController::class, 'ssl'])->name('websites.ssl');
+        Route::get('/websites/{website}/logs', [Controllers\Client\ClientWebsiteController::class, 'logs'])->name('websites.logs');
+        Route::delete('/websites/{website}', [Controllers\Client\ClientWebsiteController::class, 'destroy'])->name('websites.destroy');
+
+        Route::get('/ftp', [Controllers\Client\ClientFtpController::class, 'index'])->name('ftp');
+        Route::post('/ftp', [Controllers\Client\ClientFtpController::class, 'store'])->name('ftp.store');
+        Route::post('/ftp/{ftp}/password', [Controllers\Client\ClientFtpController::class, 'password'])->name('ftp.password');
+        Route::post('/ftp/{ftp}/toggle', [Controllers\Client\ClientFtpController::class, 'toggle'])->name('ftp.toggle');
+        Route::delete('/ftp/{ftp}', [Controllers\Client\ClientFtpController::class, 'destroy'])->name('ftp.destroy');
+
+        Route::get('/databases', [Controllers\Client\ClientDatabaseController::class, 'index'])->name('databases');
+        Route::post('/databases', [Controllers\Client\ClientDatabaseController::class, 'store'])->name('databases.store');
+        Route::get('/databases/{database}/credentials', [Controllers\Client\ClientDatabaseController::class, 'credentials'])->name('databases.credentials');
+        Route::post('/databases/{database}/password', [Controllers\Client\ClientDatabaseController::class, 'password'])->name('databases.password');
+        Route::delete('/databases/{database}', [Controllers\Client\ClientDatabaseController::class, 'destroy'])->name('databases.destroy');
+
+        Route::get('/account/security', [Controllers\Client\ClientSecurityController::class, 'show'])->name('account.security');
+        Route::post('/account/password', [Controllers\Client\ClientSecurityController::class, 'password'])->middleware('throttle:10,1')->name('account.password');
+        Route::post('/account/two-factor/setup', [Controllers\Client\ClientSecurityController::class, 'setup'])->middleware('throttle:10,1')->name('account.2fa.setup');
+        Route::post('/account/two-factor/confirm', [Controllers\Client\ClientSecurityController::class, 'confirm'])->middleware('throttle:10,1')->name('account.2fa.confirm');
+        Route::post('/account/two-factor/recovery-codes', [Controllers\Client\ClientSecurityController::class, 'recoveryCodes'])->middleware('throttle:10,1')->name('account.2fa.recovery');
+        Route::post('/account/two-factor/disable', [Controllers\Client\ClientSecurityController::class, 'disable'])->middleware('throttle:10,1')->name('account.2fa.disable');
+        Route::post('/account/two-factor/forget-browser', [Controllers\Client\ClientSecurityController::class, 'forgetBrowser'])->name('account.2fa.forget');
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
 | Panel
 |--------------------------------------------------------------------------
 */
@@ -343,6 +394,26 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::delete('/accounts/{user}', [Controllers\AccountController::class, 'destroy'])->name('accounts.destroy');
         Route::post('/accounts/{user}/two-factor-reset', [Controllers\TwoFactorController::class, 'reset'])->name('accounts.2fa.reset');
         Route::post('/accounts/two-factor-policy', [Controllers\TwoFactorController::class, 'policy'])->name('accounts.2fa.policy');
+
+        // Clients (hosting customers and the client sub-panel)
+        Route::get('/clients', [Controllers\ClientController::class, 'index'])->name('clients.index');
+        Route::get('/clients/list', [Controllers\ClientController::class, 'list'])->name('clients.list');
+        Route::post('/clients', [Controllers\ClientController::class, 'store'])->name('clients.store');
+        Route::get('/clients/storage', [Controllers\ClientController::class, 'storage'])->name('clients.storage');
+        Route::post('/clients/usage', [Controllers\ClientController::class, 'refreshUsage'])->name('clients.usage');
+        Route::get('/clients/logs', [Controllers\ClientController::class, 'logs'])->name('clients.logs');
+        Route::post('/clients/settings', [Controllers\ClientController::class, 'saveSettings'])->name('clients.settings');
+        Route::post('/clients/packages', [Controllers\ClientController::class, 'packageStore'])->name('clients.packages.store');
+        Route::put('/clients/packages/{package}', [Controllers\ClientController::class, 'packageUpdate'])->name('clients.packages.update');
+        Route::delete('/clients/packages/{package}', [Controllers\ClientController::class, 'packageDestroy'])->name('clients.packages.destroy');
+        Route::put('/clients/{client}', [Controllers\ClientController::class, 'update'])->name('clients.update');
+        Route::delete('/clients/{client}', [Controllers\ClientController::class, 'destroy'])->name('clients.destroy');
+        Route::post('/clients/{client}/suspend', [Controllers\ClientController::class, 'suspend'])->name('clients.suspend');
+        Route::post('/clients/{client}/unsuspend', [Controllers\ClientController::class, 'unsuspend'])->name('clients.unsuspend');
+        Route::post('/clients/{client}/two-factor-reset', [Controllers\ClientController::class, 'resetTwoFactor'])->name('clients.2fa.reset');
+        Route::get('/clients/{client}/resources', [Controllers\ClientController::class, 'resources'])->name('clients.resources');
+        Route::post('/clients/{client}/resources', [Controllers\ClientController::class, 'assign'])->name('clients.assign');
+        Route::post('/clients/{client}/login', [Controllers\Client\ClientAuthController::class, 'impersonate'])->name('clients.impersonate');
 
         Route::get('/settings', [Controllers\SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings/panel', [Controllers\SettingsController::class, 'panel'])->name('settings.panel');

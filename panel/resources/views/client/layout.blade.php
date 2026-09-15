@@ -1,29 +1,13 @@
 @php
-    $panelTitle = \App\Models\Setting::get('panel_title', 'GBX Panel');
-    $user = auth()->user();
-    $homeActive = request()->routeIs('home') || request()->routeIs('home.*');
+    $portalTitle = \App\Services\Clients\ClientManager::settings()['client_portal_title'];
+    $client = \Illuminate\Support\Facades\Auth::guard('client')->user();
+    $impersonator = session('client_impersonator') && \Illuminate\Support\Facades\Auth::guard('web')->check();
     $menu = [
-        ['route' => 'websites.index', 'match' => 'websites.*', 'icon' => 'bi-globe2', 'label' => 'Websites'],
-        ['route' => 'ftp.index', 'match' => 'ftp.*', 'icon' => 'bi-folder-symlink', 'label' => 'FTP'],
-        ['route' => 'databases.index', 'match' => 'databases.*', 'icon' => 'bi-database', 'label' => 'Databases'],
-        ['route' => 'dns.index', 'match' => 'dns.*', 'icon' => 'bi-signpost-split', 'label' => 'DNS'],
-        ['route' => 'docker.index', 'match' => 'docker.*', 'icon' => 'bi-boxes', 'label' => 'Docker'],
-        ['route' => 'security.index', 'match' => 'security.*', 'icon' => 'bi-shield-check', 'label' => 'Security'],
-        ['route' => 'files.index', 'match' => 'files.*', 'icon' => 'bi-folder2-open', 'label' => 'Files'],
-        ['route' => 'logs.index', 'match' => 'logs.*', 'icon' => 'bi-journal-text', 'label' => 'Logs'],
-        ['route' => 'terminal.index', 'match' => 'terminal.*', 'icon' => 'bi-terminal', 'label' => 'Terminal', 'admin' => true],
-        ['route' => 'clients.index', 'match' => 'clients.*', 'icon' => 'bi-person-badge', 'label' => 'Clients', 'admin' => true],
-        ['route' => 'accounts.index', 'match' => 'accounts.*', 'icon' => 'bi-people', 'label' => 'Accounts', 'admin' => true],
-        ['route' => 'ai.index', 'match' => 'ai.*', 'icon' => 'bi-stars', 'label' => 'AI'],
-        ['route' => 'settings.index', 'match' => 'settings.*', 'icon' => 'bi-sliders', 'label' => 'Settings', 'admin' => true],
-    ];
-    $homeMenu = [
-        ['route' => 'home', 'label' => 'Overview'],
-        ['route' => 'home.monitor', 'label' => 'Monitor'],
-        ['route' => 'home.processes', 'label' => 'Processes'],
-        ['route' => 'home.services', 'label' => 'Services'],
-        ['route' => 'home.software', 'label' => 'Software'],
-        ['route' => 'home.cron', 'label' => 'Cron Jobs'],
+        ['route' => 'client.home', 'match' => 'client.home', 'icon' => 'bi-house', 'label' => 'Overview'],
+        ['route' => 'client.websites', 'match' => 'client.websites*', 'icon' => 'bi-globe2', 'label' => 'Website'],
+        ['route' => 'client.ftp', 'match' => 'client.ftp*', 'icon' => 'bi-folder-symlink', 'label' => 'FTP'],
+        ['route' => 'client.databases', 'match' => 'client.databases*', 'icon' => 'bi-database', 'label' => 'Database'],
+        ['route' => 'client.account.security', 'match' => 'client.account*', 'icon' => 'bi-shield-lock', 'label' => 'Security'],
     ];
 @endphp
 <!DOCTYPE html>
@@ -33,7 +17,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
-    <title>@yield('title', 'Home') · {{ $panelTitle }}</title>
+    <title>@yield('title', 'Overview') · {{ $portalTitle }}</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8eaed'/%3E%3Ctext x='16' y='21' font-family='Arial' font-size='12' font-weight='800' text-anchor='middle' fill='%230d0f12'%3EGBX%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
@@ -47,34 +31,26 @@
     <div class="gbx-brand">
         <div class="gbx-logo">GBX</div>
         <div class="gbx-brand-text min-w-0">
-            <strong class="text-truncate">{{ $panelTitle }}</strong>
+            <strong class="text-truncate">{{ $portalTitle }}</strong>
             <span>{{ request()->getHost() }}</span>
         </div>
     </div>
 
     <nav class="gbx-nav">
-        <button class="nav-link {{ $homeActive ? 'active' : '' }}" data-bs-toggle="collapse" data-bs-target="#navHome" aria-expanded="{{ $homeActive ? 'true' : 'false' }}">
-            <i class="bi bi-house"></i> Home <i class="bi bi-chevron-right chev"></i>
-        </button>
-        <div class="collapse {{ $homeActive ? 'show' : '' }}" id="navHome">
-            <div class="gbx-subnav">
-                @foreach ($homeMenu as $item)
-                    <a href="{{ route($item['route']) }}" class="{{ request()->routeIs($item['route']) ? 'active' : '' }}">{{ $item['label'] }}</a>
-                @endforeach
-            </div>
-        </div>
-
         @foreach ($menu as $item)
-            @continue(($item['admin'] ?? false) && ! $user->isAdmin())
             <a href="{{ route($item['route']) }}" class="nav-link {{ request()->routeIs($item['match']) ? 'active' : '' }}">
                 <i class="bi {{ $item['icon'] }}"></i> {{ $item['label'] }}
             </a>
         @endforeach
+        <form method="POST" action="{{ route('client.logout') }}">
+            @csrf
+            <button class="nav-link w-100 text-start"><i class="bi bi-box-arrow-right"></i> {{ $impersonator ? 'Back to admin' : 'Logout' }}</button>
+        </form>
     </nav>
 
     <div class="gbx-sidebar-footer">
-        <span>v{{ config('gbx.version') }}</span>
-        <span>{{ \App\Services\Shell::simulating() ? 'Simulation mode' : 'Linux' }}</span>
+        <span>{{ $client->package?->name ?? 'No package' }}</span>
+        <span>{{ $client->expires_at ? 'Until '.$client->expires_at->format('Y-m-d') : 'Perpetual' }}</span>
     </div>
 </aside>
 <div class="gbx-backdrop"></div>
@@ -83,11 +59,13 @@
     <header class="gbx-topbar">
         <button class="gbx-icon-btn d-lg-none" data-sidebar-toggle aria-label="Menu"><i class="bi bi-list"></i></button>
         <div class="min-w-0">
-            <h1 class="text-truncate">@yield('title', 'Home')</h1>
+            <h1 class="text-truncate">@yield('title', 'Overview')</h1>
         </div>
 
         <div class="ms-auto d-flex align-items-center gap-2">
-            @stack('topbar')
+            @if ($impersonator)
+                <span class="gbx-chip d-none d-md-inline-flex" title="An administrator is viewing this account"><i class="bi bi-eye"></i> Admin view</span>
+            @endif
 
             <div class="dropdown" id="tasksDropdown">
                 <button class="gbx-icon-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Tasks" title="Background tasks">
@@ -102,25 +80,22 @@
 
             <div class="dropdown">
                 <button class="btn btn-ghost p-1 d-flex align-items-center gap-2" data-bs-toggle="dropdown">
-                    <span class="gbx-avatar">{{ $user->initials }}</span>
+                    <span class="gbx-avatar">{{ $client->initials }}</span>
                     <span class="d-none d-md-block text-start lh-sm">
-                        <span class="d-block small fw-semibold">{{ $user->name }}</span>
-                        <span class="d-block cell-sub">{{ \App\Models\User::ROLES[$user->role] ?? $user->role }}</span>
+                        <span class="d-block small fw-semibold">{{ $client->name }}</span>
+                        <span class="d-block cell-sub">{{ $client->username }}</span>
                     </span>
                     <i class="bi bi-chevron-down small text-muted d-none d-md-block"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end">
-                    <div class="px-2 py-1 cell-sub">Signed in as <strong class="text-light">{{ $user->username }}</strong></div>
+                    <div class="px-2 py-1 cell-sub">Signed in as <strong class="text-light">{{ $client->username }}</strong></div>
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#passwordModal"><i class="bi bi-key"></i> Change password</a>
-                    <a class="dropdown-item d-flex align-items-center" href="{{ route('account.security') }}"><i class="bi bi-shield-lock"></i> Two-factor authentication @if ($user->hasTwoFactor())<span class="badge badge-success ms-auto ps-2">On</span>@else<span class="badge badge-soft ms-auto ps-2">Off</span>@endif</a>
-                    @if ($user->isAdmin())
-                        <a class="dropdown-item" href="{{ route('settings.index') }}"><i class="bi bi-sliders"></i> Settings</a>
-                    @endif
+                    <a class="dropdown-item d-flex align-items-center" href="{{ route('client.account.security') }}"><i class="bi bi-shield-lock"></i> Two-factor authentication @if ($client->hasTwoFactor())<span class="badge badge-success ms-auto ps-2">On</span>@else<span class="badge badge-soft ms-auto ps-2">Off</span>@endif</a>
                     <div class="dropdown-divider"></div>
-                    <form method="POST" action="{{ route('logout') }}">
+                    <form method="POST" action="{{ route('client.logout') }}">
                         @csrf
-                        <button class="dropdown-item text-danger"><i class="bi bi-box-arrow-right"></i> Sign out</button>
+                        <button class="dropdown-item text-danger"><i class="bi bi-box-arrow-right"></i> {{ $impersonator ? 'Back to admin' : 'Sign out' }}</button>
                     </form>
                 </div>
             </div>
@@ -132,12 +107,11 @@
     </main>
 
     <footer class="gbx-footer">
-        <span>{{ $panelTitle }} &middot; Server control panel</span>
+        <span>{{ $portalTitle }}</span>
         <span>{{ now()->format('Y-m-d H:i') }} {{ config('app.timezone') }}</span>
     </footer>
 </div>
 
-{{-- Task output modal --}}
 <div class="modal fade" id="taskModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -154,10 +128,9 @@
     </div>
 </div>
 
-{{-- Change own password --}}
 <div class="modal fade" id="passwordModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content" data-ajax action="{{ route('profile.password') }}">
+        <form class="modal-content" data-ajax action="{{ route('client.account.password') }}">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-key"></i> Change password</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -193,7 +166,7 @@
 <script src="{{ asset('assets/vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
 @stack('vendor')
 <script>
-    window.GBX = { routes: { tasks: @json(url('/tasks')), editor: @json(route('files.editor')) }, user: @json(['name' => $user->name, 'role' => $user->role]) };
+    window.GBX = { routes: { tasks: @json(url('/client/tasks')), editor: null }, user: @json(['name' => $client->name, 'role' => 'client']) };
 </script>
 <script src="{{ asset('assets/js/gbx.js') }}?v={{ config('gbx.version') }}"></script>
 @foreach (['success', 'warning', 'error'] as $flash)

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DnsZone extends Model
 {
-    protected $fillable = ['provider_id', 'name', 'external_id', 'manageable', 'note', 'records_count', 'synced_at'];
+    protected $fillable = ['provider_id', 'name', 'external_id', 'manageable', 'note', 'records_count', 'synced_at', 'client_id'];
 
     protected function casts(): array
     {
@@ -33,5 +33,10 @@ class DnsZone extends Model
     public function fqdn(string $name): string
     {
         return $name === '@' || $name === '' ? $this->name : $name.'.'.$this->name;
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
     }
 }

@@ -23,7 +23,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('login.two-factor.verify') }}" autocomplete="off" id="tfaForm">
+    <form method="POST" action="{{ $action ?? route('login.two-factor.verify') }}" autocomplete="off" id="tfaForm">
         @csrf
         <div id="tfaCode" @if ($recovery) hidden @endif>
             <p class="small text-muted mb-3"><i class="bi bi-phone me-1"></i> Open your authenticator app and enter the 6-digit code for {{ $title }}.</p>
@@ -48,11 +48,11 @@
 
     <div class="d-flex justify-content-between mt-3 small">
         <a href="#" class="text-muted" id="tfaSwitch">{{ $recovery ? 'Use the authenticator app' : 'Use a recovery code' }}</a>
-        <a href="{{ route('login') }}" class="text-muted">Cancel</a>
+        <a href="{{ $cancel ?? route('login') }}" class="text-muted">Cancel</a>
     </div>
 
     <div class="text-center text-muted mt-4" style="font-size:.72rem">
-        Lost the phone and the recovery codes? An administrator can reset it in Accounts, or run <code>gbx 2fa-off</code> on the server as root.
+        @isset($lostHint){{ $lostHint }}@else Lost the phone and the recovery codes? An administrator can reset it in Accounts, or run <code>gbx 2fa-off</code> on the server as root.@endisset
     </div>
 </div>
 

@@ -21,8 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $middleware->alias([
             'panel.access' => \App\Http\Middleware\PanelAccess::class,
+            'client.access' => \App\Http\Middleware\ClientAccess::class,
         ]);
-        $middleware->redirectGuestsTo(fn () => route('login'));
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('client', 'client/*') ? route('client.login') : route('login'));
+        $middleware->redirectUsersTo(fn (Request $request) => $request->is('client', 'client/*') ? route('client.home') : route('home'));
         $middleware->trustProxies(at: '127.0.0.1');
         // file contents (code editor, config editors) must be saved byte for byte
         $middleware->trimStrings(except: ['content', 'value']);

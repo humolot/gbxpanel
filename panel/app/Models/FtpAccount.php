@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class FtpAccount extends Model
 {
-    protected $fillable = ['username', 'password', 'path', 'is_active', 'website_id', 'notes'];
+    protected $fillable = ['username', 'password', 'path', 'is_active', 'website_id', 'notes', 'client_id'];
 
     protected $hidden = ['password'];
 
@@ -18,5 +18,10 @@ class FtpAccount extends Model
     public function website()
     {
         return $this->belongsTo(Website::class);
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
     }
 }

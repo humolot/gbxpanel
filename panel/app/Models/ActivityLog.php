@@ -8,7 +8,7 @@ class ActivityLog extends Model
 {
     public const UPDATED_AT = null;
 
-    protected $fillable = ['user_id', 'category', 'action', 'details', 'ip'];
+    protected $fillable = ['user_id', 'category', 'action', 'details', 'ip', 'client_id'];
 
     public function user()
     {
@@ -19,7 +19,8 @@ class ActivityLog extends Model
     {
         try {
             static::query()->create([
-                'user_id' => auth()->id(),
+                'user_id' => auth('web')->id(),
+                'client_id' => \App\Services\Clients\ClientContext::id(),
                 'category' => $category,
                 'action' => $action,
                 'details' => $details,
