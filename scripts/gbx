@@ -21,6 +21,7 @@
 #  gbx doctor                check services, permissions and the login page
 #  gbx fpm                   (re)create the dedicated gbxpanel-fpm service
 #  gbx terminal [on|off|status|restart]  real-time web terminal service
+#  gbx tools-access public|private  phpMyAdmin/Adminer for everyone or only through the panel
 #  gbx fix | update | logs | vhost | uninstall
 #
 set -uo pipefail
@@ -221,12 +222,18 @@ EOF
 
 # Generate the panel virtual host from .env (single source of truth).
 write_vhost() {
-    local port domain ssl cert key ssl_block=""
+    local port domain ssl cert key ssl_block="" tools_token tools_require="Require all granted"
     port="$(env_get GBX_PORT)"; domain="$(env_get GBX_DOMAIN)"; ssl="$(env_get GBX_SSL)"
     cert="$(env_get GBX_SSL_CERT)"; key="$(env_get GBX_SSL_KEY)"
     [ -n "$port" ] || die "GBX_PORT is not set in $ENV_FILE"
     [ -f "$FPM_UNIT" ] || ensure_panel_fpm
     a2enmod -q proxy proxy_http proxy_wstunnel >/dev/null 2>&1
+
+    # phpMyAdmin and Adminer: public, or only for browsers that opened them from the panel (token cookie)
+    tools_token="$(env_get GBX_TOOLS_TOKEN)"
+    if [ -n "$tools_token" ] && ! is_true "$(env_get GBX_TOOLS_PUBLIC)"; then
+        tools_require="Require expr \"%{HTTP_COOKIE} =~ /(^|; *)gbx_tools=${tools_token}(;|\$)/\""
+    fi
 
     if is_true "$ssl"; then
         if [ -z "$cert" ] || [ ! -f "$cert" ] || [ ! -f "$key" ]; then
@@ -275,7 +282,17 @@ ${ssl_block}
         <Directory ${GBX_ROOT}/phpmyadmin>
             Options -Indexes
             AllowOverride None
-            Require all granted
+            ${tools_require}
+            DirectoryIndex index.php
+        </Directory>
+    </IfFile>
+
+    <IfFile ${GBX_ROOT}/adminer/index.php>
+        Alias /adminer ${GBX_ROOT}/adminer
+        <Directory ${GBX_ROOT}/adminer>
+            Options -Indexes
+            AllowOverride None
+            ${tools_require}
             DirectoryIndex index.php
         </Directory>
     </IfFile>
@@ -533,6 +550,8 @@ cmd_update() {
     install -m 700 "$(dirname "$src")/scripts/gbx-terminal" "$TERM_BIN"
     rm -rf "$tmp"
     cmd_fix >/dev/null
+    # render cron jobs again: the runner and task scripts can change between versions
+    artisan gbx:cron-sync >/dev/null || echo "Warning: cron jobs could not be synchronized (open Home > Cron Jobs and save a task)" >&2
     ensure_panel_fpm
     ensure_terminal_service
     write_vhost
@@ -554,6 +573,21 @@ cmd_fpm() {
     ensure_panel_fpm
     write_vhost
     okay "gbxpanel-fpm is running on ${FPM_SOCK}."
+}
+
+cmd_tools_access() {
+    case "${1:-}" in
+        public)
+            env_set GBX_TOOLS_PUBLIC true
+            ;;
+        private)
+            [ -n "$(env_get GBX_TOOLS_TOKEN)" ] || env_set GBX_TOOLS_TOKEN "$(openssl rand -hex 24)"
+            env_set GBX_TOOLS_PUBLIC false
+            ;;
+        *) die "usage: gbx tools-access public|private" ;;
+    esac
+    write_vhost
+    okay "phpMyAdmin and Adminer access set to $1."
 }
 
 cmd_terminal() {
@@ -693,6 +727,7 @@ case "${1:-}" in
     fpm-service) ensure_panel_fpm; okay "gbxpanel-fpm is running on ${FPM_SOCK}." ;;
     doctor) cmd_doctor ;;
     terminal) cmd_terminal "${2:-on}" ;;
-    -h|--help|help) sed -n '3,28p' "$0" ;;
+    tools-access) cmd_tools_access "${2:-}" ;;
+    -h|--help|help) sed -n '3,29p' "$0" ;;
     *) die "unknown command: $1 (see gbx help)" ;;
 esac
