@@ -26,7 +26,7 @@ class SslManager
         // domain must resolve, aliases without DNS are skipped with a warning.
         $script = "set -e\n"
             ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y certbot; }\n"
-            ."resolves() { getent ahosts \"\$1\" 2>/dev/null | awk '{print \$1}' | sort -u | tr '\\n' ' '; }\n"
+            ."resolves() { { getent ahosts \"\$1\" 2>/dev/null || true; } | awk '{print \$1}' | sort -u | tr '\\n' ' '; }\n"
             ."IPS=\$(resolves {$domain})\n"
             ."if [ -z \"\$IPS\" ]; then echo \"Error: {$site->domain} has no DNS record (A/AAAA). Point it to this server and try again.\"; exit 1; fi\n"
             ."echo \"{$site->domain} resolves to \$IPS\"\n"
