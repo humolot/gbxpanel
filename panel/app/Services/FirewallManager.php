@@ -130,21 +130,31 @@ class FirewallManager
             return ['port' => 22, 'permit_root_login' => 'prohibit-password', 'password_authentication' => 'yes', 'pubkey_authentication' => 'yes', 'active' => true];
         }
 
-        $out = Shell::run('sshd -T 2>/dev/null | grep -Ei "^(port|permitrootlogin|passwordauthentication|pubkeyauthentication) "', 15)->output;
+        // With socket activation (Ubuntu 22.10+) sshd is not running and /run/sshd is missing,
+        // which makes "sshd -T" fail. Create it first, then fall back to the config files.
+        $out = Shell::run('mkdir -p /run/sshd; sshd -T 2>/dev/null | grep -Ei "^(port|permitrootlogin|passwordauthentication|pubkeyauthentication) "', 15)->output;
+        if (trim($out) === '') {
+            $out = Shell::run('cat /etc/ssh/sshd_config.d/*.conf /etc/ssh/sshd_config 2>/dev/null | grep -Ei "^\s*(port|permitrootlogin|passwordauthentication|pubkeyauthentication)\s"', 15)->output;
+        }
+
         $cfg = [];
         foreach (explode("\n", $out) as $line) {
             $p = preg_split('/\s+/', trim($line), 2);
-            if (count($p) === 2) {
-                $cfg[strtolower($p[0])] = $p[1];
+            // first value wins, like sshd itself
+            if (count($p) === 2 && ! isset($cfg[strtolower($p[0])])) {
+                $cfg[strtolower($p[0])] = trim($p[1]);
             }
         }
+
+        $services = app(ServiceManager::class);
 
         return [
             'port' => (int) ($cfg['port'] ?? 22),
             'permit_root_login' => $cfg['permitrootlogin'] ?? 'prohibit-password',
             'password_authentication' => $cfg['passwordauthentication'] ?? 'yes',
             'pubkey_authentication' => $cfg['pubkeyauthentication'] ?? 'yes',
-            'active' => app(ServiceManager::class)->status('ssh')['active'],
+            'active' => $services->status('ssh')['active'] || $services->status('ssh.socket')['active'],
+            'socket_activated' => $services->status('ssh.socket')['active'],
         ];
     }
 
@@ -162,7 +172,7 @@ class FirewallManager
         Shell::run('[ -f '.$file.' ] && cp '.$file.' '.$file.'.bak || true');
         Shell::writeFile($file, $content, '0600')->throw('Unable to write SSH config');
 
-        $test = Shell::run('sshd -t 2>&1', 20);
+        $test = Shell::run('mkdir -p /run/sshd && sshd -t 2>&1', 20);
         if ($test->failed()) {
             Shell::run('if [ -f '.$file.'.bak ]; then mv '.$file.'.bak '.$file.'; else rm -f '.$file.'; fi');
 

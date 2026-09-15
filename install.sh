@@ -73,6 +73,26 @@ random_string() { tr -dc "$1" </dev/urandom 2>/dev/null | head -c "$2" || true; 
 
 port_in_use() { ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$1\$"; }
 
+# SSH port without relying on "sshd -T" alone: with socket activation (Ubuntu 22.10+)
+# sshd is not running, /run/sshd does not exist and "sshd -T" fails.
+detect_ssh_port() {
+    local port=""
+    if command -v sshd >/dev/null 2>&1; then
+        mkdir -p /run/sshd 2>/dev/null || true
+        port="$(sshd -T 2>/dev/null | awk '/^port / {print $2; exit}' || true)"
+    fi
+    if [ -z "$port" ] && systemctl is-active --quiet ssh.socket 2>/dev/null; then
+        port="$(systemctl show ssh.socket -p Listen --value 2>/dev/null | grep -oE '[0-9]+ \(Stream\)' | head -1 | cut -d' ' -f1 || true)"
+    fi
+    if [ -z "$port" ]; then
+        port="$(grep -hsE '^[[:space:]]*Port[[:space:]]+[0-9]+' /etc/ssh/sshd_config.d/*.conf /etc/ssh/sshd_config 2>/dev/null | awk '{print $2; exit}' || true)"
+    fi
+    if [ -z "$port" ]; then
+        port="$(ss -tlnpH 2>/dev/null | awk '/"sshd"/ {n=split($4,a,":"); print a[n]; exit}' || true)"
+    fi
+    [[ "$port" =~ ^[0-9]+$ ]] && echo "$port" || echo 22
+}
+
 banner() {
     echo -e "${C_WHITE}"
     cat <<'EOF'
@@ -279,7 +299,16 @@ KEEP_ADMIN=0
 if [ "$REINSTALL" -eq 1 ]; then
     [ -z "$PANEL_PORT" ] && PANEL_PORT="$(env_value GBX_PORT)"
     [ -z "$PANEL_ENTRY" ] && PANEL_ENTRY="$(env_value GBX_ENTRY)"
-    [ -z "$ADMIN_USER" ] && [ -z "$ADMIN_PASS" ] && KEEP_ADMIN=1
+    if [ -z "$ADMIN_USER" ] && [ -z "$ADMIN_PASS" ]; then
+        EXISTING_ADMIN="$(sqlite3 "$PANEL_DIR/database/database.sqlite" "SELECT username FROM users WHERE role='admin' ORDER BY id LIMIT 1;" 2>/dev/null || true)"
+        if [ -f "$GBX_ROOT/default.txt" ] && [ -n "$EXISTING_ADMIN" ]; then
+            KEEP_ADMIN=1
+        elif [ -n "$EXISTING_ADMIN" ]; then
+            # the previous run stopped before the credentials were shown: reset the password
+            ADMIN_USER="$EXISTING_ADMIN"
+            info "previous installation was incomplete, a new password will be generated for ${EXISTING_ADMIN}"
+        fi
+    fi
 fi
 
 if [ -z "$PANEL_PORT" ]; then
@@ -469,15 +498,18 @@ ok "supervisor worker (2 processes) and cron scheduler configured"
 
 # ------------------------------------------------------------------ 12. firewall
 step "Configuring firewall"
-SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port / {print $2; exit}')"
-SSH_PORT="${SSH_PORT:-22}"
+SSH_PORT="$(detect_ssh_port)"
 if [ "$USE_FIREWALL" -eq 1 ]; then
-    run ufw allow "${SSH_PORT}/tcp" comment 'SSH'
-    run ufw allow 80/tcp comment 'HTTP'
-    run ufw allow 443/tcp comment 'HTTPS'
-    run ufw allow "${PANEL_PORT}/tcp" comment 'GBX Panel'
-    run ufw --force enable
-    ok "UFW enabled (SSH ${SSH_PORT}, 80, 443, ${PANEL_PORT})"
+    # a firewall problem (e.g. no iptables inside a container) must not abort the installation
+    if run ufw allow "${SSH_PORT}/tcp" comment 'SSH' \
+        && run ufw allow 80/tcp comment 'HTTP' \
+        && run ufw allow 443/tcp comment 'HTTPS' \
+        && run ufw allow "${PANEL_PORT}/tcp" comment 'GBX Panel' \
+        && run ufw --force enable; then
+        ok "UFW enabled (SSH ${SSH_PORT}, 80, 443, ${PANEL_PORT})"
+    else
+        warn "UFW could not be configured (see ${LOG_FILE}). Open ports ${SSH_PORT}, 80, 443 and ${PANEL_PORT} manually."
+    fi
 else
     warn "firewall left untouched (--no-firewall). Make sure port ${PANEL_PORT} is reachable."
 fi
