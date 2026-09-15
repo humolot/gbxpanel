@@ -136,8 +136,10 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
     // Files
     Route::get('/files', [Controllers\FileController::class, 'index'])->name('files.index');
     Route::get('/files/list', [Controllers\FileController::class, 'list'])->name('files.list');
-    Route::get('/files/read', [Controllers\FileController::class, 'read'])->name('files.read');
-    Route::post('/files/save', [Controllers\FileController::class, 'save'])->name('files.save');
+    Route::get('/files/editor', [Controllers\FileController::class, 'editor'])->name('files.editor');
+    Route::get('/files/open', [Controllers\FileController::class, 'open'])->name('files.open');
+    Route::get('/files/search', [Controllers\FileController::class, 'search'])->name('files.search');
+    Route::post('/files/write', [Controllers\FileController::class, 'write'])->name('files.write');
     Route::post('/files/create', [Controllers\FileController::class, 'create'])->name('files.create');
     Route::post('/files/rename', [Controllers\FileController::class, 'rename'])->name('files.rename');
     Route::post('/files/delete', [Controllers\FileController::class, 'delete'])->name('files.delete');

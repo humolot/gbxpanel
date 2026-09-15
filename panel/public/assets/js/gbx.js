@@ -298,6 +298,106 @@
         });
     }
 
+    /* ---------------------------------------------------------- code editor */
+    // The code editor runs in a large modal. The editor page is loaded once in an iframe
+    // (keeps Monaco's AMD loader away from the panel scripts) and reused: tabs stay open
+    // when the modal is closed and opened again.
+    GBX.editor = (function () {
+        var $modal = null, frame = null, queue = [];
+
+        function api() {
+            try { return frame && frame.contentWindow && frame.contentWindow.GBX_EDITOR_API; } catch (e) { return null; }
+        }
+
+        function build() {
+            if ($modal) return;
+            $modal = $(
+                '<div class="modal fade gbx-editor-modal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">' +
+                '<div class="modal-dialog"><div class="modal-content">' +
+                '<div class="gbx-editor-bar">' +
+                '<span class="gbx-editor-title"><i class="bi bi-code-slash"></i> Code Editor</span>' +
+                '<span class="gbx-editor-path font-mono"></span>' +
+                '<button type="button" class="gbx-editor-btn" data-editor="max" title="Maximize"><i class="bi bi-fullscreen"></i></button>' +
+                '<button type="button" class="gbx-editor-btn" data-editor="close" title="Close"><i class="bi bi-x-lg"></i></button>' +
+                '</div>' +
+                '<div class="gbx-editor-body"><div class="gbx-editor-loading"><i class="bi bi-arrow-repeat spin"></i> Loading editor...</div><iframe title="Code editor"></iframe></div>' +
+                '</div></div></div>'
+            ).appendTo('body');
+            frame = $modal.find('iframe')[0];
+
+            $modal.on('click', '[data-editor=max]', function () {
+                var max = !$modal.hasClass('maximized');
+                $modal.toggleClass('maximized', max);
+                $(this).attr('title', max ? 'Restore' : 'Maximize').find('i').attr('class', 'bi ' + (max ? 'bi-fullscreen-exit' : 'bi-fullscreen'));
+            });
+            $modal.on('click', '[data-editor=close]', close);
+            $modal.on('shown.bs.modal', function () { var a = api(); if (a) a.focus(); });
+
+            frame.addEventListener('load', function () {
+                $modal.find('.gbx-editor-loading').remove();
+                var tries = 0;
+                (function flush() {
+                    var a = api();
+                    if (!a && tries++ < 50) return setTimeout(flush, 100);
+                    if (a) queue.splice(0).forEach(function (fn) { fn(a); });
+                })();
+            });
+
+            window.addEventListener('beforeunload', function (e) {
+                var a = api();
+                if (a && a.dirtyCount() > 0) { e.preventDefault(); e.returnValue = ''; }
+            });
+        }
+
+        function open(opts) {
+            opts = opts || {};
+            build();
+            bootstrap.Modal.getOrCreateInstance($modal[0]).show();
+            var run = function (a) {
+                if (opts.open) a.open(opts.open, opts.root); else if (opts.root) a.setRoot(opts.root);
+                a.focus();
+            };
+            var a = api();
+            if (a) return run(a);
+            queue.push(run);
+            if (!frame.getAttribute('src')) {
+                var params = { embed: 1 };
+                if (opts.root) params.root = opts.root;
+                if (opts.open) params.open = opts.open;
+                queue.length = 0; // the first load opens the requested file itself
+                frame.setAttribute('src', GBX.routes.editor + '?' + $.param(params));
+            }
+        }
+
+        function hide() { bootstrap.Modal.getOrCreateInstance($modal[0]).hide(); }
+
+        function close() {
+            var a = api(), dirty = a ? a.dirtyCount() : 0;
+            if (!dirty) return hide();
+            Swal.fire({
+                title: 'Unsaved changes', icon: 'warning',
+                html: dirty + ' file(s) have unsaved changes.',
+                showDenyButton: true, showCancelButton: true,
+                confirmButtonText: 'Save all and close', denyButtonText: 'Close without saving', cancelButtonText: 'Cancel',
+                buttonsStyling: false,
+                customClass: { confirmButton: 'btn btn-primary me-2', denyButton: 'btn btn-outline-danger me-2', cancelButton: 'btn btn-outline-secondary' }
+            }).then(function (r) {
+                if (r.isConfirmed) a.saveAll().then(function (left) { if (!left) hide(); });
+                else if (r.isDenied) { a.discardAll(); hide(); }
+            });
+        }
+
+        // called from inside the editor to show the active file in the title bar
+        function title(path) { if ($modal) $modal.find('.gbx-editor-path').text(path || ''); }
+
+        return { open: open, close: close, title: title };
+    })();
+
+    $(document).on('click', '[data-edit-file], [data-edit-root]', function (e) {
+        e.preventDefault();
+        GBX.editor.open({ open: $(this).data('edit-file') || null, root: $(this).data('edit-root') || null });
+    });
+
     /* --------------------------------------------------------------- layout */
     $(function () {
         $('[data-sidebar-toggle]').on('click', function () { $('body').toggleClass('sidebar-open'); });

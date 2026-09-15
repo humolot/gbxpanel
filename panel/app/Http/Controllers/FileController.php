@@ -35,19 +35,76 @@ class FileController extends Controller
         return response()->json(['ok' => true, 'path' => $path, 'items' => $this->files->list($path)]);
     }
 
-    public function read(Request $request)
+    /** Code editor (file tree, tabs, search). Loaded inside the editor modal with ?embed=1. */
+    public function editor(Request $request)
     {
-        $path = FileManager::normalize($request->query('path'));
+        $root = FileManager::normalize($request->query('root', config('gbx.paths.www')));
+        $open = $request->query('open') ? FileManager::normalize($request->query('open')) : null;
+        if ($open && ! $request->query('root')) {
+            $root = dirname($open);
+        }
 
-        return $this->ok('ok', ['path' => $path, 'content' => $this->files->read($path)]);
+        return view('files.editor', [
+            'root' => $root,
+            'open' => $open,
+            'encodings' => array_keys(FileManager::ENCODINGS),
+            'readOnly' => ! $request->user()->canWrite(),
+            'embed' => $request->boolean('embed'),
+        ]);
     }
 
-    public function save(Request $request)
+    public function open(Request $request)
     {
-        $data = $request->validate(['path' => ['required', 'string'], 'content' => ['present', 'nullable', 'string']]);
-        $path = FileManager::normalize($data['path']);
+        $data = $request->validate(['path' => ['required', 'string'], 'encoding' => ['nullable', 'string']]);
 
-        return $this->result($this->files->write($path, (string) $data['content']), 'File saved', 'files', $path);
+        return $this->ok('ok', $this->files->open($data['path'], $data['encoding'] ?? null));
+    }
+
+    public function write(Request $request)
+    {
+        $data = $request->validate([
+            'path' => ['required', 'string'],
+            'content' => ['present', 'nullable', 'string'],
+            'encoding' => ['nullable', 'string'],
+            'mtime' => ['nullable', 'integer'],
+            'force' => ['nullable', 'boolean'],
+        ]);
+        $path = FileManager::normalize($data['path']);
+        $result = $this->files->save($path, (string) $data['content'], $data['encoding'] ?? 'utf-8', $data['mtime'] ?? null, $request->boolean('force'));
+
+        if (! $result['ok']) {
+            return $this->fail($result['message'] ?? 'Unable to save file', ! empty($result['conflict']) ? 409 : 422, $result);
+        }
+        $this->audit('files', 'Edited file', $path);
+
+        return $this->ok('Saved '.basename($path), $result);
+    }
+
+    public function search(Request $request)
+    {
+        $data = $request->validate([
+            'dir' => ['required', 'string'],
+            'query' => ['required', 'string', 'min:1', 'max:200'],
+            'mode' => ['nullable', 'in:content,name'],
+            'case' => ['nullable', 'boolean'],
+            'word' => ['nullable', 'boolean'],
+            'regex' => ['nullable', 'boolean'],
+            'include' => ['nullable', 'string', 'max:200'],
+            'skip_heavy' => ['nullable', 'boolean'],
+        ]);
+        $dir = FileManager::normalize($data['dir']);
+        if ($dir === '/' && ($data['mode'] ?? 'content') === 'content') {
+            return $this->fail('Choose a folder below / to search file contents.');
+        }
+
+        return $this->ok('ok', ['dir' => $dir] + $this->files->search($dir, $data['query'], [
+            'mode' => $data['mode'] ?? 'content',
+            'case' => $request->boolean('case'),
+            'word' => $request->boolean('word'),
+            'regex' => $request->boolean('regex'),
+            'include' => $data['include'] ?? '',
+            'skip_heavy' => $request->boolean('skip_heavy', true),
+        ]));
     }
 
     public function create(Request $request)

@@ -190,7 +190,7 @@
 <script src="{{ asset('assets/vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
 @stack('vendor')
 <script>
-    window.GBX = { routes: { tasks: @json(url('/tasks')) }, user: @json(['name' => $user->name, 'role' => $user->role]) };
+    window.GBX = { routes: { tasks: @json(url('/tasks')), editor: @json(route('files.editor')) }, user: @json(['name' => $user->name, 'role' => $user->role]) };
 </script>
 <script src="{{ asset('assets/js/gbx.js') }}?v={{ config('gbx.version') }}"></script>
 @stack('scripts')

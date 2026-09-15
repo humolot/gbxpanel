@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->trustProxies(at: '127.0.0.1');
+        // file contents (code editor, config editors) must be saved byte for byte
+        $middleware->trimStrings(except: ['content']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // AJAX calls always receive a JSON payload the frontend can toast.

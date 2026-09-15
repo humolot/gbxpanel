@@ -240,7 +240,7 @@
                         </dl>
                         <div class="d-flex gap-2 flex-wrap">
                             <button class="btn btn-sm btn-outline-secondary" data-post="{{ route('home.services.action') }}" data-payload='{"service":"clamav-daemon","action":"restart"}' data-reload><i class="bi bi-arrow-clockwise"></i> Restart clamd</button>
-                            <a class="btn btn-sm btn-outline-secondary" href="{{ route('files.index', ['path' => '/etc/clamav', 'edit' => '/etc/clamav/clamd.conf']) }}"><i class="bi bi-file-earmark-code"></i> clamd.conf</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="#" data-edit-file="/etc/clamav/clamd.conf"><i class="bi bi-file-earmark-code"></i> clamd.conf</a>
                         </div>
                         <div class="alert alert-secondary small mt-3 mb-0">
                             Test the integration by uploading the <a href="https://www.eicar.org/download-anti-malware-testfile/" target="_blank" rel="noopener">EICAR test file</a> with the file manager: the upload must be blocked.

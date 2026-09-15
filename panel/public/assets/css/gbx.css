@@ -395,3 +395,23 @@ table.dataTable > thead > tr > th .dt-column-order { opacity: .5; }
 .alert-warning { background: rgba(245, 180, 84, .08); border-color: rgba(245, 180, 84, .3); color: #f3cf96; }
 .alert-danger { background: rgba(240, 97, 109, .08); border-color: rgba(240, 97, 109, .3); color: #f5a3aa; }
 .alert-success { background: rgba(62, 207, 142, .08); border-color: rgba(62, 207, 142, .3); color: #93e3bd; }
+
+/* code editor modal (GBX.editor) */
+.gbx-editor-modal .modal-dialog { width: 96vw; max-width: 1680px; height: 92vh; margin: 4vh auto; }
+.gbx-editor-modal .modal-content { height: 100%; overflow: hidden; background: #0a0b0d; border: 1px solid var(--gbx-border-strong); border-radius: 10px; box-shadow: 0 30px 80px rgba(0, 0, 0, .65); }
+.gbx-editor-modal.maximized .modal-dialog { width: 100vw; max-width: none; height: 100vh; margin: 0; }
+.gbx-editor-modal.maximized .modal-content { border-radius: 0; border: 0; }
+.gbx-editor-bar { display: flex; align-items: center; gap: .6rem; height: 38px; padding: 0 .35rem 0 .9rem; background: #07080a; border-bottom: 1px solid var(--gbx-border); flex: 0 0 auto; user-select: none; }
+.gbx-editor-title { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; font-size: .84rem; color: var(--gbx-text); white-space: nowrap; }
+.gbx-editor-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gbx-muted); font-size: .74rem; }
+.gbx-editor-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--gbx-text-2); }
+.gbx-editor-btn:hover { background: var(--gbx-surface-3); color: #fff; }
+.gbx-editor-btn[data-editor=close]:hover { background: #c4414e; color: #fff; }
+.gbx-editor-body { position: relative; flex: 1; min-height: 0; }
+.gbx-editor-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0d0f12; }
+.gbx-editor-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .5rem; color: var(--gbx-muted); font-size: .85rem; }
+@media (max-width: 991.98px) {
+    .gbx-editor-modal .modal-dialog { width: 100vw; max-width: none; height: 100vh; height: 100dvh; margin: 0; }
+    .gbx-editor-modal .modal-content { border-radius: 0; border: 0; }
+    .gbx-editor-modal [data-editor=max] { display: none; }
+}

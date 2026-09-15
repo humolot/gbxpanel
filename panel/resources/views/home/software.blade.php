@@ -75,7 +75,7 @@ $(function () {
                 actions = '<div class="d-flex gap-1 w-100">';
                 if (s.key === 'php') actions += '<button class="btn btn-sm btn-secondary flex-grow-1 act" data-act="php"><i class="bi bi-gear"></i> Settings</button>';
                 if (s.service) actions += '<button class="btn btn-sm btn-outline-secondary flex-grow-1 act" data-act="restart"><i class="bi bi-arrow-clockwise"></i> Restart</button>';
-                if (s.config_file) actions += '<a class="btn btn-sm btn-outline-secondary btn-icon" title="Edit config" href="{{ route('files.index') }}?edit=' + encodeURIComponent(s.config_file) + '&path=' + encodeURIComponent(s.config_file.replace(/\/[^\/]+$/, '')) + '"><i class="bi bi-file-earmark-code"></i></a>';
+                if (s.config_file) actions += '<a class="btn btn-sm btn-outline-secondary btn-icon" title="Edit config" href="#" data-edit-file="' + GBX.escape(s.config_file) + '"><i class="bi bi-file-earmark-code"></i></a>';
                 if (s.can_uninstall) actions += '<button class="btn btn-sm btn-outline-danger btn-icon act" data-act="uninstall" title="Uninstall"><i class="bi bi-trash"></i></button>';
                 actions += '</div>';
             }

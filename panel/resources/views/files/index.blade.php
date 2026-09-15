@@ -2,12 +2,6 @@
 
 @section('title', 'Files')
 
-@push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/vendor/codemirror/codemirror.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/vendor/codemirror/theme/material-darker.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/vendor/codemirror/addon/dialog.css') }}">
-@endpush
-
 @section('content')
     <div class="gbx-card">
         <div class="fm-toolbar">
@@ -29,6 +23,7 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary" id="fmUploadBtn"><i class="bi bi-upload"></i> Upload</button>
+                <button class="btn btn-outline-secondary" id="fmEditor" title="Open this folder in the code editor"><i class="bi bi-code-slash"></i> Editor</button>
                 <input type="file" id="fmUpload" multiple hidden>
             </div>
         </div>
@@ -67,23 +62,6 @@
 @endsection
 
 @push('modals')
-    <div class="modal fade" id="editorModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title min-w-0"><i class="bi bi-file-earmark-code"></i> <span class="font-mono text-truncate" id="editorPath"></span></h5>
-                    <span class="badge badge-warning ms-2 d-none" id="editorDirty">unsaved</span>
-                    <div class="ms-auto d-flex gap-2 align-items-center">
-                        <span class="cell-sub d-none d-md-inline">Ctrl+S to save</span>
-                        <button class="btn btn-sm btn-primary" id="editorSave"><i class="bi bi-check2"></i> Save</button>
-                        <button type="button" class="btn-close ms-1" id="editorClose"></button>
-                    </div>
-                </div>
-                <div class="modal-body p-2"><textarea id="editorArea"></textarea></div>
-            </div>
-        </div>
-    </div>
-
     <div class="modal fade" id="permsModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content" id="permsForm">
@@ -130,28 +108,16 @@
     </div>
 @endpush
 
-@push('vendor')
-    <script src="{{ asset('assets/vendor/codemirror/codemirror.js') }}"></script>
-    <script src="{{ asset('assets/vendor/codemirror/addon/simple.js') }}"></script>
-    @foreach (['xml', 'javascript', 'css', 'htmlmixed', 'clike', 'php', 'shell', 'sql', 'yaml', 'properties', 'nginx', 'python', 'markdown', 'dockerfile'] as $mode)
-        <script src="{{ asset('assets/vendor/codemirror/mode/'.$mode.'/'.$mode.'.js') }}"></script>
-    @endforeach
-    <script src="{{ asset('assets/vendor/codemirror/addon/searchcursor.js') }}"></script>
-    <script src="{{ asset('assets/vendor/codemirror/addon/dialog.js') }}"></script>
-    <script src="{{ asset('assets/vendor/codemirror/addon/search.js') }}"></script>
-    <script src="{{ asset('assets/vendor/codemirror/addon/matchbrackets.js') }}"></script>
-@endpush
-
 @push('scripts')
 <script>
 $(function () {
     var R = {
-        list: @json(route('files.list')), read: @json(route('files.read')), save: @json(route('files.save')), create: @json(route('files.create')),
+        list: @json(route('files.list')), create: @json(route('files.create')),
         rename: @json(route('files.rename')), del: @json(route('files.delete')), paste: @json(route('files.paste')), perms: @json(route('files.permissions')),
         compress: @json(route('files.compress')), extract: @json(route('files.extract')), upload: @json(route('files.upload')), download: @json(route('files.download')), size: @json(route('files.size')),
         scan: @json(route('security.antivirus.scan'))
     };
-    var cwd = @json($path), items = [], clipboard = null, editor = null, editingPath = null;
+    var cwd = @json($path), items = [], clipboard = null;
     var maxUpload = {{ (int) $maxUpload }};
 
     var icons = { php: 'bi-filetype-php', js: 'bi-filetype-js', css: 'bi-filetype-css', html: 'bi-filetype-html', htm: 'bi-filetype-html', json: 'bi-filetype-json', md: 'bi-filetype-md', sql: 'bi-filetype-sql', sh: 'bi-filetype-sh', py: 'bi-filetype-py', yml: 'bi-filetype-yml', yaml: 'bi-filetype-yml', xml: 'bi-filetype-xml', txt: 'bi-filetype-txt', log: 'bi-file-earmark-text', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', png: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', svg: 'bi-filetype-svg', webp: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip', gz: 'bi-file-earmark-zip', tgz: 'bi-file-earmark-zip', tar: 'bi-file-earmark-zip', rar: 'bi-file-earmark-zip', pdf: 'bi-filetype-pdf', conf: 'bi-file-earmark-code', ini: 'bi-file-earmark-code', env: 'bi-file-earmark-lock' };
@@ -258,46 +224,10 @@ $(function () {
     }).on('blur', function () { setTimeout(function () { $('#fmPath').removeClass('editing'); }, 150); });
 
     /* ------------------------------------------------------------- editor */
-    function modeFor(path) {
-        var e = ext(path), base = path.split('/').pop().toLowerCase();
-        if (base === 'dockerfile') return 'dockerfile';
-        return ({ php: 'application/x-httpd-php', js: 'javascript', mjs: 'javascript', json: { name: 'javascript', json: true }, ts: 'text/typescript', css: 'css', scss: 'text/x-scss', html: 'htmlmixed', htm: 'htmlmixed', vue: 'htmlmixed', xml: 'xml', svg: 'xml', sql: 'sql', sh: 'shell', bash: 'shell', py: 'python', yml: 'yaml', yaml: 'yaml', md: 'markdown', ini: 'properties', env: 'properties', cnf: 'properties', conf: 'nginx', htaccess: 'nginx' })[e] || (base.startsWith('.env') ? 'properties' : 'text/plain');
-    }
+    // Files open in the code editor modal (GBX.editor in gbx.js)
+    function edit(path) { GBX.editor.open({ root: cwd, open: path }); }
 
-    function edit(path) {
-        GBX.get(R.read, { path: path }).done(function (r) {
-            editingPath = r.path;
-            $('#editorPath').text(r.path);
-            bootstrap.Modal.getOrCreateInstance('#editorModal').show();
-            if (!editor) {
-                editor = CodeMirror.fromTextArea(document.getElementById('editorArea'), {
-                    theme: 'material-darker', lineNumbers: true, indentUnit: 4, matchBrackets: true, lineWrapping: false,
-                    extraKeys: { 'Ctrl-S': save, 'Cmd-S': save, 'Tab': function (cm) { cm.replaceSelection('    '); } }
-                });
-                editor.on('change', function () { $('#editorDirty').removeClass('d-none'); });
-            }
-            editor.setOption('mode', modeFor(r.path));
-            editor.setValue(r.content);
-            editor.clearHistory();
-            $('#editorDirty').addClass('d-none');
-            setTimeout(function () { editor.refresh(); editor.focus(); }, 200);
-        });
-    }
-
-    function save() {
-        var $b = $('#editorSave');
-        GBX.busy($b, true);
-        GBX.post(R.save, { path: editingPath, content: editor.getValue() }).done(function (r) {
-            toastr.success(r.message);
-            $('#editorDirty').addClass('d-none');
-        }).always(function () { GBX.busy($b, false); });
-    }
-    $('#editorSave').on('click', save);
-    $('#editorClose').on('click', function () {
-        var close = function () { bootstrap.Modal.getOrCreateInstance('#editorModal').hide(); load(cwd, false); };
-        if ($('#editorDirty').hasClass('d-none')) return close();
-        GBX.confirm({ text: 'Discard unsaved changes?', danger: true, confirmText: 'Discard' }).then(function (r) { if (r.isConfirmed) close(); });
-    });
+    $('#fmEditor').on('click', function () { GBX.editor.open({ root: cwd }); });
 
     /* ------------------------------------------------------------ actions */
     function perms(names) {
