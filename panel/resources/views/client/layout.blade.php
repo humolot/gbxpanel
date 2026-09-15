@@ -7,6 +7,7 @@
         ['route' => 'client.websites', 'match' => 'client.websites*', 'icon' => 'bi-globe2', 'label' => 'Website'],
         ['route' => 'client.ftp', 'match' => 'client.ftp*', 'icon' => 'bi-folder-symlink', 'label' => 'FTP'],
         ['route' => 'client.databases', 'match' => 'client.databases*', 'icon' => 'bi-database', 'label' => 'Database'],
+        ['route' => 'client.files', 'match' => 'client.files*', 'icon' => 'bi-folder2-open', 'label' => 'File'],
         ['route' => 'client.account.security', 'match' => 'client.account*', 'icon' => 'bi-shield-lock', 'label' => 'Security'],
     ];
 @endphp

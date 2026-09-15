@@ -62,6 +62,27 @@ Route::prefix('client')->name('client.')->group(function () {
         Route::get('/databases/{database}/credentials', [Controllers\Client\ClientDatabaseController::class, 'credentials'])->name('databases.credentials');
         Route::post('/databases/{database}/password', [Controllers\Client\ClientDatabaseController::class, 'password'])->name('databases.password');
         Route::delete('/databases/{database}', [Controllers\Client\ClientDatabaseController::class, 'destroy'])->name('databases.destroy');
+        Route::get('/databases/{database}/phpmyadmin', [Controllers\Client\ClientDatabaseController::class, 'phpMyAdmin'])->name('databases.phpmyadmin');
+        Route::get('/databases/{database}/backups', [Controllers\Client\ClientDatabaseController::class, 'backups'])->name('databases.backups');
+        Route::post('/databases/{database}/backup', [Controllers\Client\ClientDatabaseController::class, 'backup'])->name('databases.backup');
+        Route::post('/databases/{database}/restore', [Controllers\Client\ClientDatabaseController::class, 'restore'])->name('databases.restore');
+        Route::get('/databases/{database}/download', [Controllers\Client\ClientDatabaseController::class, 'downloadBackup'])->name('databases.download');
+        Route::post('/databases/{database}/delete-backup', [Controllers\Client\ClientDatabaseController::class, 'deleteBackup'])->name('databases.backups.delete');
+        Route::get('/databases/{database}/export', [Controllers\Client\ClientDatabaseController::class, 'export'])->name('databases.export');
+        Route::post('/databases/{database}/import', [Controllers\Client\ClientDatabaseController::class, 'import'])->name('databases.import');
+
+        Route::get('/files', [Controllers\Client\ClientFileController::class, 'index'])->name('files');
+        Route::get('/files/list', [Controllers\Client\ClientFileController::class, 'list'])->name('files.list');
+        Route::get('/files/read', [Controllers\Client\ClientFileController::class, 'read'])->name('files.read');
+        Route::post('/files/write', [Controllers\Client\ClientFileController::class, 'write'])->name('files.write');
+        Route::post('/files/create', [Controllers\Client\ClientFileController::class, 'create'])->name('files.create');
+        Route::post('/files/rename', [Controllers\Client\ClientFileController::class, 'rename'])->name('files.rename');
+        Route::post('/files/delete', [Controllers\Client\ClientFileController::class, 'delete'])->name('files.delete');
+        Route::post('/files/paste', [Controllers\Client\ClientFileController::class, 'paste'])->name('files.paste');
+        Route::post('/files/upload', [Controllers\Client\ClientFileController::class, 'upload'])->name('files.upload');
+        Route::get('/files/download', [Controllers\Client\ClientFileController::class, 'download'])->name('files.download');
+        Route::post('/files/extract', [Controllers\Client\ClientFileController::class, 'extract'])->name('files.extract');
+        Route::post('/files/compress', [Controllers\Client\ClientFileController::class, 'compress'])->name('files.compress');
 
         Route::get('/account/security', [Controllers\Client\ClientSecurityController::class, 'show'])->name('account.security');
         Route::post('/account/password', [Controllers\Client\ClientSecurityController::class, 'password'])->middleware('throttle:10,1')->name('account.password');
