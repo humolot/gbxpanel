@@ -6,6 +6,8 @@ GBX Panel is a self-hosted control panel for Linux servers. It manages websites,
 - **Frontend:** Bootstrap 5, jQuery, Bootstrap Icons (no build step, no CDN at runtime)
 - **Managed stack:** Apache 2 (mpm_event), PHP-FPM 7.4 – 8.5, MySQL / MariaDB, Pure-FTPd, Docker, UFW, Fail2ban, ClamAV, Certbot, Supervisor, PM2, Node.js
 
+![GBX Panel](screenshots/preview.png)
+
 ---
 
 ## Table of contents
@@ -23,12 +25,13 @@ GBX Panel is a self-hosted control panel for Linux servers. It manages websites,
 11. [Cron jobs](#cron-jobs)
 12. [Docker](#docker)
 13. [DNS](#dns)
-14. [Clients](#clients)
-15. [Architecture](#architecture)
-16. [Configuration reference](#configuration-reference)
-17. [Security model](#security-model)
-18. [Development](#development)
-19. [Uninstall](#uninstall)
+14. [Backup storage](#backup-storage)
+15. [Clients](#clients)
+16. [Architecture](#architecture)
+17. [Configuration reference](#configuration-reference)
+18. [Security model](#security-model)
+19. [Development](#development)
+20. [Uninstall](#uninstall)
 
 ---
 
