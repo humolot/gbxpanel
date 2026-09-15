@@ -111,6 +111,7 @@
                     <div class="px-2 py-1 cell-sub">Signed in as <strong class="text-light">{{ $user->username }}</strong></div>
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#passwordModal"><i class="bi bi-key"></i> Change password</a>
+                    <a class="dropdown-item d-flex align-items-center" href="{{ route('account.security') }}"><i class="bi bi-shield-lock"></i> Two-factor authentication @if ($user->hasTwoFactor())<span class="badge badge-success ms-auto ps-2">On</span>@else<span class="badge badge-soft ms-auto ps-2">Off</span>@endif</a>
                     @if ($user->isAdmin())
                         <a class="dropdown-item" href="{{ route('settings.index') }}"><i class="bi bi-sliders"></i> Settings</a>
                     @endif
@@ -193,6 +194,11 @@
     window.GBX = { routes: { tasks: @json(url('/tasks')), editor: @json(route('files.editor')) }, user: @json(['name' => $user->name, 'role' => $user->role]) };
 </script>
 <script src="{{ asset('assets/js/gbx.js') }}?v={{ config('gbx.version') }}"></script>
+@foreach (['success', 'warning', 'error'] as $flash)
+    @if (session($flash))
+        <script>toastr[@json($flash)](@json(session($flash)), '', { timeOut: 9000 });</script>
+    @endif
+@endforeach
 @stack('scripts')
 </body>
 </html>

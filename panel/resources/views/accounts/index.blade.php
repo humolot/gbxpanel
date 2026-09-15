@@ -13,11 +13,20 @@
         </div>
     </div>
 
+    <div class="db-notice cron-notice">
+        <i class="bi bi-shield-lock"></i>
+        <div class="flex-grow-1">
+            <div class="fw-semibold">Require two-factor authentication</div>
+            <div class="cell-sub">Accounts without an authenticator app must enable it before using the panel. Enable it on your own account first.</div>
+        </div>
+        <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="tfaPolicy" @checked($twoFactorRequired)></div>
+    </div>
+
     <div class="gbx-card mb-3">
         <div class="gbx-card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover">
-                    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last login</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
+                    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Two-factor</th><th>Last login</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
                     <tbody>
                     @foreach ($users as $u)
                         <tr>
@@ -29,10 +38,21 @@
                             </td>
                             <td><span class="badge {{ $u->role === 'admin' ? 'badge-info' : 'badge-soft' }}">{{ $roles[$u->role] ?? $u->role }}</span></td>
                             <td>{!! $u->is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Disabled</span>' !!}</td>
+                            <td>
+                                @if ($u->hasTwoFactor())
+                                    <span class="badge badge-success" title="Enabled {{ $u->two_factor_confirmed_at->format('Y-m-d H:i') }}"><i class="bi bi-shield-check"></i> Enabled</span>
+                                    <div class="cell-sub">{{ count($u->two_factor_recovery_codes ?? []) }} recovery codes</div>
+                                @else
+                                    <span class="badge {{ $twoFactorRequired ? 'badge-warning' : 'badge-soft' }}">{{ $twoFactorRequired ? 'Pending' : 'Off' }}</span>
+                                @endif
+                            </td>
                             <td>{{ $u->last_login_at?->diffForHumans() ?? 'Never' }}<div class="cell-sub font-mono">{{ $u->last_login_ip }}</div></td>
                             <td class="cell-sub">{{ $u->created_at->format('Y-m-d') }}</td>
                             <td class="table-actions">
                                 <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#userModal" data-mode="edit" data-user="{{ json_encode($u->only(['id', 'name', 'username', 'email', 'role', 'is_active'])) }}"><i class="bi bi-pencil"></i> Edit</button>
+                                @if ($u->hasTwoFactor())
+                                    <button class="btn btn-sm btn-outline-secondary" data-post="{{ route('accounts.2fa.reset', $u) }}" data-confirm="Reset two-factor authentication of {{ $u->username }}? The account signs in with the password only until it enables it again." data-danger data-reload title="Reset two-factor authentication"><i class="bi bi-shield-x"></i> Reset 2FA</button>
+                                @endif
                                 @unless ($u->is(auth()->user()))
                                     <button class="btn btn-sm btn-ghost btn-icon text-danger" data-post="{{ route('accounts.destroy', $u) }}" data-method="DELETE" data-confirm="Delete account {{ $u->username }}?" data-danger data-reload><i class="bi bi-trash"></i></button>
                                 @endunless
@@ -154,6 +174,10 @@
 <script>
 $(function () {
     var storeUrl = @json(route('accounts.store')), base = @json(url('accounts'));
+    $('#tfaPolicy').on('change', function () {
+        var $c = $(this), on = this.checked;
+        GBX.post(@json(route('accounts.2fa.policy')), { required: on ? 1 : 0 }).done(function (r) { toastr.success(r.message); setTimeout(function () { location.reload(); }, 900); }).fail(function () { $c.prop('checked', !on); });
+    });
     $('#userModal').on('show.bs.modal', function (e) {
         var $t = $(e.relatedTarget), $f = $('#userForm');
         $f[0].reset();

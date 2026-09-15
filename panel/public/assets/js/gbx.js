@@ -104,6 +104,7 @@
         return $.ajax(ajax).fail(function (xhr, textStatus) {
             if (textStatus === 'abort' || options.silent) return;
             if (xhr.status === 401) { window.location.reload(); return; }
+            if (xhr.responseJSON && xhr.responseJSON.redirect) { window.location.href = xhr.responseJSON.redirect; return; }
             toastr.error(GBX.errorMessage(xhr));
         }).done(function (res) {
             if (res && res.task) GBX.task(res.task, options.onTaskDone);

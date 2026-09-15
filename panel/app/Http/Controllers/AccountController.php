@@ -19,6 +19,7 @@ class AccountController extends Controller
             'roles' => User::ROLES,
             'logins' => ActivityLog::query()->with('user:id,username')->where('category', 'auth')->latest('id')->limit(30)->get(),
             'sessions' => DB::table('sessions')->whereNotNull('user_id')->orderByDesc('last_activity')->limit(20)->get(),
+            'twoFactorRequired' => \App\Services\TwoFactor::required(),
         ]);
     }
 

@@ -10,6 +10,7 @@
 #  gbx restart | stop | start | status
 #  gbx password [pass]       change the admin password (random when empty)
 #  gbx username <name>       change the admin username
+#  gbx 2fa-off [user]        disable two-factor authentication of an account (lost phone)
 #  gbx port <port>           change the panel port
 #  gbx entry <path|off>      change or disable the security entrance
 #  gbx ssl on|off            enable (self-signed) or disable HTTPS on the panel
@@ -386,6 +387,12 @@ cmd_password() {
     if [ -n "$pass" ]; then artisan gbx:user password --value="$pass"; else artisan gbx:user password; fi
 }
 
+cmd_2fa_off() {
+    local name="${1:-}"
+    [ -z "$name" ] && name="$(ask "Username (empty = first administrator): ")"
+    if [ -n "$name" ]; then artisan gbx:user two-factor-off --user="$name"; else artisan gbx:user two-factor-off; fi
+}
+
 cmd_username() {
     local name="${1:-}"
     [ -z "$name" ] && name="$(ask "New username: ")"
@@ -676,6 +683,7 @@ run_option() {
         24) cmd_doctor ;;
         25) cmd_terminal on ;;
         26) cmd_terminal off ;;
+        27) cmd_2fa_off ;;
         0|q|"") exit 0 ;;
         *) echo "Invalid option: $1" ;;
     esac
@@ -701,11 +709,12 @@ menu() {
     echo "                                     (24) Diagnose problems"
     echo "                                     (25) Enable real-time terminal"
     echo "                                     (26) Disable real-time terminal"
+    echo "                                     (27) Disable two-factor login"
     echo "   (0)  Exit"
     echo -e "${W}${B}  ==============================================================${N}"
     echo
     local choice
-    choice="$(ask "  Enter an option [0-26]: ")"
+    choice="$(ask "  Enter an option [0-27]: ")"
     echo
     run_option "$choice"
 }
@@ -716,6 +725,7 @@ case "${1:-}" in
     info|default|status|restart|stop|start|cache|fix|update|logs|uninstall) "cmd_$1" ;;
     password|passwd) cmd_password "${2:-}" ;;
     username) cmd_username "${2:-}" ;;
+    2fa-off|two-factor-off) cmd_2fa_off "${2:-}" ;;
     port) cmd_port "${2:-}" ;;
     entry) cmd_entry "${2:-}" ;;
     ssl) cmd_ssl "${2:-}" "${3:-}" ;;
@@ -728,6 +738,6 @@ case "${1:-}" in
     doctor) cmd_doctor ;;
     terminal) cmd_terminal "${2:-on}" ;;
     tools-access) cmd_tools_access "${2:-}" ;;
-    -h|--help|help) sed -n '3,29p' "$0" ;;
+    -h|--help|help) sed -n '3,30p' "$0" ;;
     *) die "unknown command: $1 (see gbx help)" ;;
 esac

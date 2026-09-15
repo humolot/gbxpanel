@@ -17,6 +17,8 @@ if ($entry !== '') {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [Controllers\AuthController::class, 'show'])->name('login');
     Route::post('/login', [Controllers\AuthController::class, 'login'])->middleware('throttle:10,1')->name('login.attempt');
+    Route::get('/login/two-factor', [Controllers\AuthController::class, 'twoFactor'])->name('login.two-factor');
+    Route::post('/login/two-factor', [Controllers\AuthController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('login.two-factor.verify');
 });
 Route::post('/logout', [Controllers\AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
@@ -297,6 +299,12 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
 
     // Own profile
     Route::post('/profile/password', [Controllers\AccountController::class, 'password'])->name('profile.password');
+    Route::get('/account/security', [Controllers\TwoFactorController::class, 'show'])->name('account.security');
+    Route::post('/account/two-factor/setup', [Controllers\TwoFactorController::class, 'setup'])->middleware('throttle:10,1')->name('account.2fa.setup');
+    Route::post('/account/two-factor/confirm', [Controllers\TwoFactorController::class, 'confirm'])->middleware('throttle:10,1')->name('account.2fa.confirm');
+    Route::post('/account/two-factor/recovery-codes', [Controllers\TwoFactorController::class, 'recoveryCodes'])->middleware('throttle:10,1')->name('account.2fa.recovery');
+    Route::post('/account/two-factor/disable', [Controllers\TwoFactorController::class, 'disable'])->middleware('throttle:10,1')->name('account.2fa.disable');
+    Route::post('/account/two-factor/forget-browser', [Controllers\TwoFactorController::class, 'forgetBrowser'])->name('account.2fa.forget');
 
     // Administrators only
     Route::middleware('panel.access:admin')->group(function () {
@@ -308,6 +316,8 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::post('/accounts', [Controllers\AccountController::class, 'store'])->name('accounts.store');
         Route::put('/accounts/{user}', [Controllers\AccountController::class, 'update'])->name('accounts.update');
         Route::delete('/accounts/{user}', [Controllers\AccountController::class, 'destroy'])->name('accounts.destroy');
+        Route::post('/accounts/{user}/two-factor-reset', [Controllers\TwoFactorController::class, 'reset'])->name('accounts.2fa.reset');
+        Route::post('/accounts/two-factor-policy', [Controllers\TwoFactorController::class, 'policy'])->name('accounts.2fa.policy');
 
         Route::get('/settings', [Controllers\SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings/panel', [Controllers\SettingsController::class, 'panel'])->name('settings.panel');

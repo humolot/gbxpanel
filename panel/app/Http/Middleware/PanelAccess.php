@@ -22,8 +22,20 @@ class PanelAccess
             return redirect()->route('login');
         }
 
-        // read-only users may still chat with the AI (it only gets read tools) and change their password
-        $viewerAllowed = $request->routeIs('ai.send', 'ai.action', 'ai.action.all', 'ai.model', 'ai.destroy', 'profile.password', 'logout');
+        // every account can manage its own password and two-factor authentication
+        $selfService = $request->routeIs('profile.password', 'account.security', 'account.2fa.*', 'logout');
+
+        // administrators can require two-factor authentication: nothing else is reachable until it is enabled
+        if (! $selfService && ! $user->hasTwoFactor() && \App\Services\TwoFactor::required()) {
+            $message = 'Enable two-factor authentication to continue.';
+
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'message' => $message, 'redirect' => route('account.security')], 403)
+                : redirect()->route('account.security')->with('warning', $message);
+        }
+
+        // read-only users may still chat with the AI (it only gets read tools)
+        $viewerAllowed = $selfService || $request->routeIs('ai.send', 'ai.action', 'ai.action.all', 'ai.model', 'ai.destroy');
 
         $denied = ($role === 'admin' && ! $user->isAdmin())
             || (! $request->isMethodSafe() && ! $user->canWrite() && ! $viewerAllowed);

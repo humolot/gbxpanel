@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 class GbxUser extends Command
 {
     protected $signature = 'gbx:user
-        {action : password|username|verify|list}
+        {action : password|username|verify|list|two-factor-off}
         {--user= : Existing username (defaults to the first administrator)}
         {--value= : New password or username (random password when omitted)}';
 
@@ -47,6 +47,17 @@ class GbxUser extends Command
                 \Illuminate\Support\Facades\DB::table('sessions')->where('user_id', $user->id)->delete();
                 $this->line("Username: {$user->username}");
                 $this->line("Password: {$password}");
+                break;
+
+            case 'two-factor-off':
+                if (! $user->hasTwoFactor()) {
+                    $this->line("Two-factor authentication is not enabled for {$user->username}.");
+
+                    return self::SUCCESS;
+                }
+                $user->disableTwoFactor();
+                \App\Models\ActivityLog::query()->create(['user_id' => $user->id, 'category' => 'account', 'action' => 'Two-factor authentication disabled from the command line']);
+                $this->line("Two-factor authentication disabled for {$user->username}. Enable it again in the panel (Account security).");
                 break;
 
             case 'username':
