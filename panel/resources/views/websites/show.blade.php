@@ -116,7 +116,7 @@
                                 <div class="tab-pane fade show active" id="ssl-le">
                                     <form data-ajax data-no-reset data-keep-open action="{{ route('websites.ssl.issue', $site) }}" class="row g-3">
                                         <div class="col-12">
-                                            <div class="alert alert-secondary small mb-0"><i class="bi bi-info-circle me-1"></i> The domain and aliases must resolve to this server (DNS A/AAAA records) and port 80 must be open. Certificates renew automatically.</div>
+                                            <div class="alert alert-secondary small mb-0"><i class="bi bi-info-circle me-1"></i> The domain must resolve to this server (DNS A/AAAA record) and port 80 must be open. Aliases without a DNS record are skipped and listed in the task log. Certificates renew automatically.</div>
                                         </div>
                                         <div class="col-md-8">
                                             <label class="form-label">E-mail for expiry notices</label>

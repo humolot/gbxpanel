@@ -17,16 +17,29 @@ class SslManager
             throw new \InvalidArgumentException('A valid e-mail is required by Let\'s Encrypt.');
         }
 
-        $domains = array_merge([$site->domain], $includeAliases ? $site->aliasList() : []);
-        $args = implode(' ', array_map(fn ($d) => '-d '.Shell::arg($d), $domains));
+        $domain = Shell::arg($site->domain);
+        $aliases = implode(' ', array_map(fn ($d) => Shell::arg($d), $includeAliases ? $site->aliasList() : []));
         $root = Shell::arg($site->root_path);
 
+        // Let's Encrypt rejects the whole certificate when a single name has no DNS record
+        // (e.g. a www alias that was never created), so names are checked first: the main
+        // domain must resolve, aliases without DNS are skipped with a warning.
         $script = "set -e\n"
             ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y certbot; }\n"
+            ."resolves() { getent ahosts \"\$1\" 2>/dev/null | awk '{print \$1}' | sort -u | tr '\\n' ' '; }\n"
+            ."IPS=\$(resolves {$domain})\n"
+            ."if [ -z \"\$IPS\" ]; then echo \"Error: {$site->domain} has no DNS record (A/AAAA). Point it to this server and try again.\"; exit 1; fi\n"
+            ."echo \"{$site->domain} resolves to \$IPS\"\n"
+            ."ARGS=\"-d {$site->domain}\"; NAMES=\"{$site->domain}\"\n"
+            ."for NAME in {$aliases}; do\n"
+            ."    IPS=\$(resolves \"\$NAME\")\n"
+            ."    if [ -n \"\$IPS\" ]; then echo \"\$NAME resolves to \$IPS\"; ARGS=\"\$ARGS -d \$NAME\"; NAMES=\"\$NAMES, \$NAME\";\n"
+            ."    else echo \"Warning: skipping alias \$NAME (no DNS record). Create the record and issue the certificate again to include it.\"; fi\n"
+            ."done\n"
             ."mkdir -p {$root}/.well-known/acme-challenge\n"
-            ."certbot certonly --webroot -w {$root} {$args} --non-interactive --agree-tos -m ".Shell::arg($email)
-            .' --cert-name '.Shell::arg($site->domain)." --expand --keep-until-expiring --deploy-hook 'systemctl reload apache2'\n"
-            ."echo 'Certificate issued for: ".implode(', ', $domains)."'";
+            ."certbot certonly --webroot -w {$root} \$ARGS --non-interactive --agree-tos -m ".Shell::arg($email)
+            .' --cert-name '.$domain." --expand --keep-until-expiring --deploy-hook 'systemctl reload apache2'\n"
+            ."echo \"Certificate issued for: \$NAMES\"";
 
         return TaskRunner::dispatch("Issue SSL for {$site->domain}", $script, 'ssl', ['website_id' => $site->id, 'on_success' => 'ssl_issued']);
     }

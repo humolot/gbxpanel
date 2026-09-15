@@ -115,6 +115,7 @@
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" name="add_www" id="addWww" checked>
                                 <label class="form-check-label" for="addWww">Add www alias</label>
+                                <div class="form-text mt-0">Needs a DNS record for www.</div>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -166,9 +167,19 @@ $(function () {
         $('#sitesTable').DataTable({ order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: [6] }] });
     }
 
+    // www is suggested for apex domains only (example.com, example.com.br), not for subdomains
+    var wwwTouched = false;
+    $('#addWww').on('change', function () { wwwTouched = true; });
+    function isApex(d) {
+        var l = d.replace(/^\.+|\.+$/g, '').split('.');
+        if (l.length <= 2) return true;
+        return l.length === 3 && ['com', 'net', 'org', 'gov', 'edu', 'co', 'ac', 'gob', 'or', 'ne'].indexOf(l[1]) !== -1 && l[2].length === 2;
+    }
+
     $('#siteForm [name=domain]').on('input', function () {
         var d = this.value.trim().toLowerCase();
         $('#siteForm [name=root_path]').attr('placeholder', @json($wwwRoot) + '/' + (d || 'example.com'));
+        if (!wwwTouched) $('#addWww').prop('checked', !d || (d.indexOf('www.') !== 0 && isApex(d)));
     });
 
     $(document).on('click', '.delete-site', function () {

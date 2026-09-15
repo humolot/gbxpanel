@@ -106,4 +106,18 @@ class PanelAccessTest extends TestCase
         $this->actingAs($admin)->postJson('/websites', ['domain' => 'bad domain'])->assertUnprocessable();
         $this->actingAs($admin)->postJson('/websites', ['domain' => 'ok.com', 'root_path' => '/etc'])->assertUnprocessable();
     }
+
+    public function test_ssl_request_skips_aliases_without_dns(): void
+    {
+        $this->actingAs($this->admin());
+        $site = \App\Models\Website::query()->create(['domain' => 'pruebas.goodbits.tech', 'aliases' => 'www.pruebas.goodbits.tech', 'root_path' => '/www/wwwroot/pruebas.goodbits.tech', 'status' => 'active']);
+
+        $script = app(\App\Services\SslManager::class)->issue($site, 'admin@goodbits.tech')->script;
+
+        $this->assertStringContainsString('getent ahosts', $script);
+        $this->assertMatchesRegularExpression('/for NAME in .www\.pruebas\.goodbits\.tech.; do/', $script);
+        $this->assertStringContainsString('skipping alias $NAME (no DNS record)', $script);
+        $this->assertStringContainsString('$ARGS --non-interactive', $script);
+        $this->assertStringNotContainsString('-d www.pruebas', $script);
+    }
 }

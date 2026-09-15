@@ -21,7 +21,7 @@ class WebsiteTools extends ToolGroup
                 'php_version' => self::str('Installed PHP version, e.g. 8.4'),
                 'proxy_target' => self::str('Reverse proxy URL, e.g. http://127.0.0.1:3000'),
                 'aliases' => self::str('Space separated extra domains'),
-                'add_www' => self::bool('Add www alias, default true'),
+                'add_www' => self::bool('Add a www alias. Default: true for apex domains (example.com), false for subdomains (shop.example.com). Only add it when the www DNS record exists.'),
                 'root_path' => self::str('Custom document root (Laravel: /www/wwwroot/<domain>/public)'),
                 'create_database' => self::bool('Also create a MySQL database and user'),
                 'create_ftp' => self::bool('Also create an FTP account'),
@@ -72,7 +72,7 @@ class WebsiteTools extends ToolGroup
                     'proxy_target' => self::a($a, 'proxy_target'),
                     'aliases' => self::a($a, 'aliases', ''),
                     'root_path' => self::a($a, 'root_path'),
-                    'add_www' => (bool) self::a($a, 'add_www', true),
+                    'add_www' => (bool) self::a($a, 'add_www', \App\Models\Website::isApexDomain((string) $a['domain'])),
                     'create_database' => (bool) self::a($a, 'create_database', false),
                     'create_ftp' => (bool) self::a($a, 'create_ftp', false),
                 ], fn ($v) => $v !== null));

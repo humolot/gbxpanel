@@ -48,4 +48,13 @@ class ValidationTest extends TestCase
         $this->assertFalse($fw->validSource('203.0.113.0/33'));
         $this->assertFalse($fw->validSource('any; reboot'));
     }
+    public function test_www_alias_is_suggested_only_for_apex_domains(): void
+    {
+        foreach (['example.com', 'goodbits.tech', 'example.com.br', 'example.co.uk'] as $apex) {
+            $this->assertTrue(\App\Models\Website::isApexDomain($apex), $apex);
+        }
+        foreach (['pruebas.goodbits.tech', 'shop.example.com', 'api.v2.example.com', 'shop.example.com.br'] as $sub) {
+            $this->assertFalse(\App\Models\Website::isApexDomain($sub), $sub);
+        }
+    }
 }

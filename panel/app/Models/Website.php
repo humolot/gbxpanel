@@ -27,6 +27,21 @@ class Website extends Model
         return $this->hasMany(FtpAccount::class);
     }
 
+    /**
+     * True for a registrable (apex) domain such as example.com or example.com.br, where a
+     * www alias is common. Subdomains like shop.example.com usually have no www record.
+     */
+    public static function isApexDomain(string $domain): bool
+    {
+        $labels = explode('.', strtolower(trim($domain, '.')));
+        if (count($labels) <= 2) {
+            return true;
+        }
+
+        // two-part public suffixes: example.com.br, example.co.uk, example.org.ar ...
+        return count($labels) === 3 && in_array($labels[1], ['com', 'net', 'org', 'gov', 'edu', 'co', 'ac', 'gob', 'or', 'ne'], true) && strlen($labels[2]) === 2;
+    }
+
     public function aliasList(): array
     {
         return array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string) $this->aliases))));
