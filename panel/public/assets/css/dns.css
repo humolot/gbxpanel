@@ -1,15 +1,5 @@
 /* GBX Panel - DNS module */
 .dns-table td { vertical-align: middle; }
-.dns-logo { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fff; font-size: 1rem; flex-shrink: 0; vertical-align: middle; }
-.dns-logo.sm { width: 24px; height: 24px; border-radius: 6px; font-size: .75rem; margin-right: .2rem; }
-.dns-error { max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e08a92; }
-.dns-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: .75rem; margin-top: 1rem; }
-.dns-provider-card { display: flex; align-items: center; gap: .7rem; padding: .75rem .9rem; background: var(--gbx-surface); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); }
-.dns-form .cron-row { grid-template-columns: 120px 1fr; }
-.dns-notes { margin: .5rem 0 0; padding-left: 1.1rem; font-size: .8rem; color: var(--gbx-text-2); }
-.dns-notes li { margin-bottom: .35rem; }
-.dns-notes li::marker { color: var(--gbx-muted); }
-.dns-docs a { color: var(--gbx-success); text-decoration: none; }
 .dns-zone-link { color: var(--gbx-success); text-decoration: none; font-weight: 500; }
 .dns-zone-link.disabled { color: var(--gbx-text-2); pointer-events: none; }
 .dns-value { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -29,6 +19,4 @@
     .dns-record-grid { grid-template-columns: 1fr 1fr; }
     .dns-record-grid .dns-col-value { grid-column: 1 / -1; }
 }
-@media (max-width: 575.98px) {
-    .dns-form .cron-row { grid-template-columns: 1fr; }
-}
+
