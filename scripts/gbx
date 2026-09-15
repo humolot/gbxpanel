@@ -523,7 +523,9 @@ cmd_update() {
     [ -f "$src/artisan" ] || die "invalid archive"
 
     cp "$PANEL_DIR/database/database.sqlite" "$GBX_ROOT/backup/database-$(date +%Y%m%d%H%M%S).sqlite"
-    rsync -a --delete --exclude='.env' --exclude='database/*.sqlite*' --exclude='storage/' --exclude='vendor/' "$src/" "$PANEL_DIR/"
+    # patterns are anchored with "/" so only the top-level vendor/ (composer) is skipped,
+    # not public/assets/vendor/ (bundled front-end libraries)
+    rsync -a --delete --exclude='/.env' --exclude='/database/*.sqlite*' --exclude='/storage/' --exclude='/vendor/' "$src/" "$PANEL_DIR/"
     install -m 755 "$(dirname "$src")/scripts/gbx" "$GBX_ROOT/bin/gbx"
     chown -R "$GBX_USER:$GBX_USER" "$PANEL_DIR"
     (cd "$PANEL_DIR" && runuser -u "$GBX_USER" -- env HOME="$GBX_ROOT" COMPOSER_HOME="$GBX_ROOT/.composer" "$PHP_BIN" /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --no-progress) || die "composer install failed"

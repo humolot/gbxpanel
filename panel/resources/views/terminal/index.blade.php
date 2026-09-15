@@ -378,6 +378,11 @@ $(function () {
         }
     });
 
+    if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined') {
+        $('#termPanes').html('<div class="p-4 text-danger">Terminal assets are missing (assets/vendor/xterm). Run <code>gbx update</code> on the server.</div>');
+        return;
+    }
+
     window.addEventListener('beforeunload', function () { sessions.forEach(function (s) { s.close(true); }); });
 
     new Session();

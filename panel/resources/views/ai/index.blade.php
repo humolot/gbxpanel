@@ -128,10 +128,12 @@ $(function () {
     // so answers keep the panel's professional, icon-font based look.
     var cp = String.fromCodePoint;
     var EMOJI = new RegExp('[' + cp(0x1F000) + '-' + cp(0x1FAFF) + cp(0x2600) + '-' + cp(0x27BF) + cp(0x2B00) + '-' + cp(0x2BFF) + cp(0xFE0F) + cp(0x200D) + cp(0x20E3) + ']', 'gu');
-    marked.setOptions({ gfm: true, breaks: false });
+    var hasMarkdown = typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined';
+    if (hasMarkdown) marked.setOptions({ gfm: true, breaks: false });
 
     function md(text) {
         var clean = String(text || '').replace(EMOJI, '').replace(/^([ \t]*#{1,6})[ \t]+/gm, '$1 ');
+        if (!hasMarkdown) return '<p>' + GBX.escape(clean).split(String.fromCharCode(10)).join('<br>') + '</p>';
         var html = DOMPurify.sanitize(marked.parse(clean), {
             FORBID_TAGS: ['style', 'form', 'input', 'button', 'img', 'iframe', 'svg', 'math'],
             FORBID_ATTR: ['style', 'id']
