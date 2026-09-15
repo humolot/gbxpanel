@@ -1,2 +1,7 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+*.sh text eol=lf
+scripts/gbx text eol=lf
+*.png binary
+*.jpg binary
+*.woff binary
+*.woff2 binary
