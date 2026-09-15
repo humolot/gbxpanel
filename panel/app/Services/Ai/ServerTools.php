@@ -8,6 +8,7 @@ use App\Services\Ai\Tools\AntivirusTools;
 use App\Services\Ai\Tools\BackupTools;
 use App\Services\Ai\Tools\CronTools;
 use App\Services\Ai\Tools\DatabaseTools;
+use App\Services\Ai\Tools\DnsTools;
 use App\Services\Ai\Tools\DockerTools;
 use App\Services\Ai\Tools\FileTools;
 use App\Services\Ai\Tools\FirewallTools;
@@ -34,6 +35,7 @@ class ServerTools
         'websites' => WebsiteTools::class,
         'databases' => DatabaseTools::class,
         'cron' => CronTools::class,
+        'dns' => DnsTools::class,
         'firewall' => FirewallTools::class,
         'antivirus' => AntivirusTools::class,
         'docker' => DockerTools::class,

@@ -5,8 +5,9 @@ function siteCreated(res) {
     var html = '<p>The website is online.</p>';
     if (res.database) html += '<div class="text-start mb-2"><div class="small-caps mb-1">Database</div><div class="kv"><dt>Name</dt><dd class="font-mono">' + GBX.escape(res.database.name) + '</dd><dt>User</dt><dd class="font-mono">' + GBX.escape(res.database.username) + '</dd><dt>Password</dt><dd class="font-mono">' + GBX.escape(res.database.password) + '</dd></div></div>';
     if (res.ftp) html += '<div class="text-start mb-2"><div class="small-caps mb-1">FTP</div><div class="kv"><dt>User</dt><dd class="font-mono">' + GBX.escape(res.ftp.username) + '</dd><dt>Password</dt><dd class="font-mono">' + GBX.escape(res.ftp.password) + '</dd></div></div>';
+    if (res.dns) html += '<div class="text-start mb-2"><div class="small-caps mb-1">DNS</div><ul class="small mb-0 ps-3">' + res.dns.map(function (m) { return '<li>' + GBX.escape(m) + '</li>'; }).join('') + '</ul></div>';
     if (res.warnings) html += '<div class="alert alert-warning text-start small">' + res.warnings.map(GBX.escape).join('<br>') + '</div>';
-    if (!res.database && !res.ftp && !res.warnings) { window.location.reload(); return; }
+    if (!res.database && !res.ftp && !res.warnings && !res.dns) { window.location.reload(); return; }
     Swal.fire({ title: 'Website created', html: html + '<p class="small text-muted mt-2">Save these credentials, passwords are not shown again in plain text here.</p>', icon: 'success', buttonsStyling: false, customClass: { confirmButton: 'btn btn-primary' } })
         .then(function () { window.location.reload(); });
 }
@@ -40,7 +41,18 @@ function siteCreated(res) {
         var d = this.value.trim().toLowerCase();
         $('#siteForm [name=root_path]').attr('placeholder', S.wwwRoot + '/' + (d || 'example.com'));
         if (!wwwTouched) $('#addWww').prop('checked', !d || (d.indexOf('www.') !== 0 && isApex(d)));
+        clearTimeout(dnsTimer);
+        dnsTimer = setTimeout(function () {
+            if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) { $('#siteDnsWrap').prop('hidden', true); return; }
+            GBX.get(S.routes.dnsMatch, { domain: d }, { silent: true }).done(function (r) {
+                $('#siteDnsWrap').prop('hidden', !r.zone);
+                $('#createDns').prop('disabled', !r.zone);
+                if (r.zone) $('#siteDnsZone').text('(' + r.zone.name + ' at ' + r.zone.provider + ')');
+            });
+        }, 400);
     });
+    var dnsTimer = null;
+    $('#createDns').prop('disabled', true);
 
     $(document).on('click', '.delete-site', function (e) {
         e.preventDefault();

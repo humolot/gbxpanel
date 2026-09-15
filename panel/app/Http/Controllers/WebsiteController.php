@@ -63,6 +63,7 @@ class WebsiteController extends Controller
             'add_www' => ['nullable', 'boolean'],
             'create_database' => ['nullable', 'boolean'],
             'create_ftp' => ['nullable', 'boolean'],
+            'create_dns' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -126,6 +127,12 @@ class WebsiteController extends Controller
             } else {
                 $extra['warnings'][] = 'FTP account was not created: '.$r->message();
             }
+        }
+
+        $dns = app(\App\Services\Dns\DnsManager::class);
+        if ($request->boolean('create_dns') && $dns->zoneFor($site->domain)) {
+            // A/AAAA records of the domain and its aliases in the DNS API accounts
+            $extra['dns'] = $dns->pointToServer(array_merge([$site->domain], $site->aliasList()));
         }
 
         $this->audit('website', "Created website {$site->domain}", $root);
@@ -265,10 +272,17 @@ class WebsiteController extends Controller
 
     public function sslIssue(Request $request, Website $website, SslManager $ssl)
     {
-        $data = $request->validate(['email' => ['required', 'email'], 'include_aliases' => ['nullable', 'boolean']]);
+        $data = $request->validate(['email' => ['required', 'email'], 'include_aliases' => ['nullable', 'boolean'], 'method' => ['nullable', 'in:http,dns'], 'wildcard' => ['nullable', 'boolean']]);
         Setting::put('ssl_email', $data['email']);
+        $method = $data['method'] ?? 'http';
 
-        return $this->task($ssl->issue($website, $data['email'], $request->boolean('include_aliases', true)), 'Requesting certificate from Let\'s Encrypt');
+        try {
+            $task = $ssl->issue($website, $data['email'], $request->boolean('include_aliases', true), $method, $method === 'dns' && $request->boolean('wildcard'));
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail($e->getMessage());
+        }
+
+        return $this->task($task, 'Requesting certificate from Let\'s Encrypt');
     }
 
     public function sslCustom(Request $request, Website $website, SslManager $ssl)

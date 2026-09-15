@@ -33,6 +33,10 @@ return [
     // Prefix commands with "sudo -n" when the web user is not root.
     'use_sudo' => env('GBX_USE_SUDO', true),
 
+    // System user and PHP CLI that run the panel (used by hooks that call artisan as root).
+    'system_user' => env('GBX_SYSTEM_USER', 'gbxpanel'),
+    'php_cli' => env('GBX_PHP_CLI', '/usr/bin/php8.4'),
+
     /*
     |--------------------------------------------------------------------------
     | Server layout

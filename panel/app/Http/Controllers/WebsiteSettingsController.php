@@ -37,6 +37,7 @@ class WebsiteSettingsController extends Controller
             'phpVersions' => $software->phpVersions(),
             'certificate' => $ssl->certificateInfo($website),
             'sslEmail' => Setting::get('ssl_email', auth()->user()->email),
+            'dnsZone' => app(\App\Services\Dns\DnsManager::class)->zoneFor($website->domain),
             'templates' => config('rewrite'),
             'hasToken' => $website->setting('git.auth') === 'token' && $git->hasToken($website),
             'openBasedir' => (bool) $website->setting('open_basedir', false),

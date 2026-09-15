@@ -6,6 +6,7 @@
         ['route' => 'websites.index', 'match' => 'websites.*', 'icon' => 'bi-globe2', 'label' => 'Websites'],
         ['route' => 'ftp.index', 'match' => 'ftp.*', 'icon' => 'bi-folder-symlink', 'label' => 'FTP'],
         ['route' => 'databases.index', 'match' => 'databases.*', 'icon' => 'bi-database', 'label' => 'Databases'],
+        ['route' => 'dns.index', 'match' => 'dns.*', 'icon' => 'bi-signpost-split', 'label' => 'DNS'],
         ['route' => 'docker.index', 'match' => 'docker.*', 'icon' => 'bi-boxes', 'label' => 'Docker'],
         ['route' => 'security.index', 'match' => 'security.*', 'icon' => 'bi-shield-check', 'label' => 'Security'],
         ['route' => 'files.index', 'match' => 'files.*', 'icon' => 'bi-folder2-open', 'label' => 'Files'],

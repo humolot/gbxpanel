@@ -295,6 +295,17 @@
                                 </div>
                             </div>
                             <div class="col-12">
+                                <div class="small-caps mb-1">Verification</div>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check m-0"><input class="form-check-input" type="radio" name="method" value="http" id="smSslHttp" @checked(! $dnsZone)><label class="form-check-label" for="smSslHttp">HTTP (file on the website, port 80)</label></div>
+                                    <div class="form-check m-0"><input class="form-check-input" type="radio" name="method" value="dns" id="smSslDns" @checked((bool) $dnsZone) @disabled(! $dnsZone)><label class="form-check-label" for="smSslDns">DNS API{{ $dnsZone ? ' ('.$dnsZone->provider->label().')' : '' }}</label></div>
+                                    <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" name="wildcard" id="smSslWildcard" @disabled(! $dnsZone)><label class="form-check-label" for="smSslWildcard">Include wildcard *.{{ $site->domain }}</label></div>
+                                </div>
+                                @unless ($dnsZone)
+                                    <div class="form-text">DNS verification and wildcard certificates need the domain in a DNS API account (<a href="{{ route('dns.index', ['tab' => 'providers']) }}">DNS</a>).</div>
+                                @endunless
+                            </div>
+                            <div class="col-12">
                                 <div class="small-caps mb-1">Domains</div>
                                 <div class="font-mono small">{{ implode(', ', $domains) }}</div>
                             </div>
@@ -304,7 +315,7 @@
                     <ul class="sm-hints">
                         <li>The domain must resolve to this server and port 80 must be open. Aliases without a DNS record are skipped.</li>
                         <li>Certificates renew automatically before they expire.</li>
-                        <li>Wildcard domains need a DNS challenge and cannot be issued here; use a custom certificate.</li>
+                        <li>DNS verification creates a temporary _acme-challenge TXT record through the DNS API: it works without port 80 and allows wildcard certificates. Renewals use the same method.</li>
                     </ul>
                 </div>
                 <div class="tab-pane fade" id="sm-ssl-custom">

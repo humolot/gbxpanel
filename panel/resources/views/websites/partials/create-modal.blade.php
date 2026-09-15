@@ -55,6 +55,18 @@
                                 <label class="form-check-label" for="createFtp">Create FTP account</label>
                             </div>
                         </div>
+                        <div class="col-12" id="siteDnsWrap" hidden>
+                            <div class="db-notice cron-notice mb-0">
+                                <i class="bi bi-signpost-split"></i>
+                                <div class="flex-grow-1">
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="create_dns" id="createDns" checked>
+                                        <label class="form-check-label" for="createDns">Create DNS records <span class="cell-sub" id="siteDnsZone"></span></label>
+                                    </div>
+                                    <div class="form-text mt-0">A/AAAA records of the domain and aliases pointing to this server, through the DNS API.</div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="col-12">
                             <label class="form-label">Notes</label>
                             <input type="text" name="notes" class="form-control" maxlength="255">

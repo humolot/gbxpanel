@@ -244,6 +244,31 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::post('/service', [Controllers\DockerSettingsController::class, 'service'])->name('service');
     });
 
+    // DNS (provider APIs)
+    Route::prefix('dns')->name('dns.')->group(function () {
+        Route::get('/', [Controllers\DnsController::class, 'index'])->name('index');
+        Route::get('/providers', [Controllers\DnsController::class, 'providers'])->name('providers');
+        Route::get('/zones', [Controllers\DnsController::class, 'zones'])->name('zones');
+        Route::post('/zones/sync', [Controllers\DnsController::class, 'syncAll'])->name('zones.sync');
+        Route::get('/zones/{zone}/records', [Controllers\DnsController::class, 'records'])->name('records');
+        Route::post('/zones/{zone}/records', [Controllers\DnsController::class, 'recordStore'])->name('records.store');
+        Route::put('/zones/{zone}/records/{record}', [Controllers\DnsController::class, 'recordUpdate'])->name('records.update');
+        Route::delete('/zones/{zone}/records/{record}', [Controllers\DnsController::class, 'recordDestroy'])->name('records.destroy');
+        Route::post('/zones/{zone}/point', [Controllers\DnsController::class, 'point'])->name('point');
+        Route::get('/match', [Controllers\DnsController::class, 'match'])->name('match');
+        Route::get('/lookup', [Controllers\DnsController::class, 'lookup'])->name('lookup');
+
+        // API credentials: administrators only
+        Route::middleware('panel.access:admin')->group(function () {
+            Route::post('/providers', [Controllers\DnsController::class, 'providerStore'])->name('providers.store');
+            Route::put('/providers/{provider}', [Controllers\DnsController::class, 'providerUpdate'])->name('providers.update');
+            Route::delete('/providers/{provider}', [Controllers\DnsController::class, 'providerDestroy'])->name('providers.destroy');
+            Route::post('/providers/{provider}/toggle', [Controllers\DnsController::class, 'providerToggle'])->name('providers.toggle');
+            Route::post('/providers/{provider}/test', [Controllers\DnsController::class, 'providerTest'])->name('providers.test');
+            Route::post('/providers/{provider}/sync', [Controllers\DnsController::class, 'providerSync'])->name('providers.sync');
+        });
+    });
+
     // Security
     Route::get('/security', [Controllers\SecurityController::class, 'index'])->name('security.index');
     Route::get('/security/data', [Controllers\SecurityController::class, 'data'])->name('security.data');

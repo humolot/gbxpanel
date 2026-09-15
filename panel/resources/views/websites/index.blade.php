@@ -314,6 +314,7 @@
         routes: {
             stats: @json(route('websites.stats')),
             bulk: @json(route('websites.bulk')),
+            dnsMatch: @json(route('dns.match')),
             base: @json(url('/websites'))
         }
     };
