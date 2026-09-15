@@ -78,6 +78,21 @@ class TaskHooks
                 }
             }
 
+            // cron job executed from the panel
+            if (($meta['on_finish'] ?? null) === 'cron_run' && isset($meta['cron_id'])) {
+                $started = $task->started_at ?? $task->created_at;
+                \App\Models\CronJob::query()->whereKey($meta['cron_id'])->update([
+                    'last_run_at' => $started,
+                    'last_status' => (int) ($task->exit_code ?? ($task->status === 'success' ? 0 : 1)),
+                    'last_duration' => $started ? max(0, (int) $started->diffInSeconds($task->finished_at ?? now(), true)) : null,
+                ]);
+            }
+
+            // script from the library executed from the panel
+            if (($meta['on_finish'] ?? null) === 'cron_script_run' && isset($meta['cron_script_id'])) {
+                \App\Models\CronScript::query()->whereKey($meta['cron_script_id'])->update(['last_run_at' => $task->started_at ?? $task->created_at, 'last_task_id' => $task->id]);
+            }
+
             if (($meta['on_finish'] ?? null) === 'malware_scan' && isset($meta['malware_scan_id'])) {
                 $scan = MalwareScan::query()->find($meta['malware_scan_id']);
                 if ($scan) {

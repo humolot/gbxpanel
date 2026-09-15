@@ -13,6 +13,9 @@ use App\Services\ShellResult;
  */
 abstract class DatabaseEngine
 {
+    /** Timestamp used in new dump names instead of now (cron jobs pass a placeholder resolved at run time). */
+    public static ?string $stampOverride = null;
+
     /** Short key used in URLs and the databases.engine column. */
     abstract public function key(): string;
 
@@ -102,7 +105,7 @@ abstract class DatabaseEngine
 
     public function newBackupFile(string $name): string
     {
-        return $this->backupDir().'/'.$name.'_'.date('Ymd_His').'.'.$this->dumpExtension();
+        return $this->backupDir().'/'.$name.'_'.(self::$stampOverride ?? date('Ymd_His')).'.'.$this->dumpExtension();
     }
 
     public function backupScript(string $name, ?DbServer $server = null): string
@@ -113,6 +116,15 @@ abstract class DatabaseEngine
         return "set -e\nmkdir -p ".Shell::arg($this->backupDir())."\n"
             .$this->dumpScript($name, $file, $server)."\n"
             .'echo "Backup: $(du -h '.Shell::arg($file).' | cut -f1) '.$file.'"';
+    }
+
+    /**
+     * Backup script stored in a cron job: it is executed many times, so it must not depend on
+     * temporary credential files. Local servers of most engines need none.
+     */
+    public function scheduledBackupScript(string $name): string
+    {
+        return $this->backupScript($name);
     }
 
     /** @return list<array{name: string, size: int, time: int}> */

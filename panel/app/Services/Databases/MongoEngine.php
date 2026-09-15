@@ -220,6 +220,20 @@ class MongoEngine extends DatabaseEngine
         return $this->cleanup($cfg).'mongodump --config='.Shell::arg($cfg).' --db='.Shell::arg($name).' --archive='.Shell::arg($file).' --gzip --quiet';
     }
 
+    /** The connection file is created from the (root-only) job script each time it runs. */
+    public function scheduledBackupScript(string $name): string
+    {
+        $this->assertName($name);
+        $file = $this->newBackupFile($name);
+        $tag = 'GBX_'.strtoupper(bin2hex(random_bytes(4)));
+
+        return "set -e\nmkdir -p ".Shell::arg($this->backupDir())."\n"
+            ."CFG=\$(mktemp /root/.gbx-mongo-XXXXXX)\ntrap 'rm -f \"\$CFG\"' EXIT\n"
+            ."cat > \"\$CFG\" <<'{$tag}'\nuri: ".json_encode($this->uri(), JSON_UNESCAPED_SLASHES)."\n{$tag}\n"
+            .'mongodump --config="$CFG" --db='.Shell::arg($name).' --archive='.Shell::arg($file)." --gzip --quiet\n"
+            .'echo "Backup: $(du -h '.Shell::arg($file).' | cut -f1) '.$file.'"';
+    }
+
     public function importScript(string $name, string $file, ?DbServer $server = null): string
     {
         $this->assertName($name);

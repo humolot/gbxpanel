@@ -51,10 +51,19 @@ class BackupManager
 
     public function backupWebsite(Website $site, bool $withDatabases = true, array $exclude = []): Task
     {
-        $stamp = date('Ymd_His');
+        [$script, $target] = $this->websiteBackupScript($site, $withDatabases, $exclude);
+
+        return TaskRunner::dispatch("Backup website {$site->domain}", $script, 'backup', ['website_id' => $site->id, 'file' => $target]);
+    }
+
+    /** @return array{0: string, 1: string} script and archive path */
+    public function websiteBackupScript(Website $site, bool $withDatabases = true, array $exclude = [], ?string $stamp = null): array
+    {
+        $scheduled = $stamp !== null;
+        $stamp ??= date('Ymd_His');
         $target = $this->root().'/site/'.$site->domain.'_'.$stamp.'.tar.gz';
         $excludes = '';
-        foreach (array_merge(['node_modules', '.cache'], $exclude) as $pattern) {
+        foreach (array_unique(array_merge(['node_modules', '.cache'], $exclude)) as $pattern) {
             if (preg_match('/^[\w.*\/-]+$/', (string) $pattern)) {
                 $excludes .= ' --exclude='.Shell::arg((string) $pattern);
             }
@@ -67,13 +76,19 @@ class BackupManager
         if ($withDatabases) {
             foreach ($site->databases as $db) {
                 $engine = \App\Services\Databases\Engines::get($db->engine);
-                if ($engine->canBackup($db->server) && ! ($engine instanceof \App\Services\Databases\SqlServerEngine)) {
-                    $script .= "\n".$engine->backupScript($db->name, $db->server);
+                // scheduled jobs skip remote databases: their temporary credential files would not survive the first run
+                if ($engine->canBackup($db->server) && ! ($engine instanceof \App\Services\Databases\SqlServerEngine) && ! ($scheduled && $db->server)) {
+                    \App\Services\Databases\DatabaseEngine::$stampOverride = $scheduled ? $stamp : null;
+                    try {
+                        $script .= "\n".($scheduled ? $engine->scheduledBackupScript($db->name) : $engine->backupScript($db->name, $db->server));
+                    } finally {
+                        \App\Services\Databases\DatabaseEngine::$stampOverride = null;
+                    }
                 }
             }
         }
 
-        return TaskRunner::dispatch("Backup website {$site->domain}", $script, 'backup', ['website_id' => $site->id, 'file' => $target]);
+        return [$script, $target];
     }
 
     public function backupDatabase(string $name): Task

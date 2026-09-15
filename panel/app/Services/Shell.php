@@ -24,7 +24,8 @@ class Shell
 
     public static function arg(string|int|float|null $value): string
     {
-        return escapeshellarg((string) $value);
+        // POSIX quoting on every platform (escapeshellarg follows cmd.exe rules on Windows), scripts always run in bash
+        return "'".str_replace("'", "'\\''", (string) $value)."'";
     }
 
     /**

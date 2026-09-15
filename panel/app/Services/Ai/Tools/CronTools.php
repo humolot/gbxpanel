@@ -12,9 +12,9 @@ class CronTools extends ToolGroup
     public function tools(): array
     {
         return [
-            'list_cron_jobs' => self::tool('Cron jobs managed by the panel (id, schedule, command, user, active).', self::params(), false, false, fn () => 'Listed cron jobs'),
+            'list_cron_jobs' => self::tool('Cron jobs and scheduled tasks managed by the panel (id, type, cycle, command, user, active, last run and exit code).', self::params(), false, false, fn () => 'Listed cron jobs'),
             'get_cron_log' => self::tool('Recent output of a cron job.', self::params(['id' => self::int('Cron job id'), 'lines' => self::int('Lines, default 100')], ['id']), false, false, fn ($a) => 'Read log of cron #'.self::labelArg($a, 'id')),
-            'manage_cron_job' => self::tool('Create, update, delete, enable, disable or run now a cron job. schedule uses cron syntax (e.g. "*/5 * * * *", "0 3 * * *", "@daily").', self::params([
+            'manage_cron_job' => self::tool('Create, update, delete, enable, disable or run now a cron job. create/update only handle shell jobs (other types are edited in Home > Cron Jobs). schedule uses cron syntax (e.g. "*/5 * * * *", "0 3 * * *", "@daily").', self::params([
                 'action' => self::str('Action', ['create', 'update', 'delete', 'enable', 'disable', 'run_now']),
                 'id' => self::int('Cron job id (all actions except create)'),
                 'name' => self::str('Name'),
@@ -28,7 +28,7 @@ class CronTools extends ToolGroup
     public function handle(string $name, array $a): mixed
     {
         if ($name === 'list_cron_jobs') {
-            return CronJob::query()->orderBy('id')->get(['id', 'name', 'schedule', 'command', 'run_as', 'is_active', 'last_run_at'])->toArray();
+            return CronJob::query()->orderBy('id')->get()->map(fn (CronJob $job) => $job->only(['id', 'name', 'type', 'schedule', 'command', 'run_as', 'is_active', 'last_run_at', 'last_status']) + ['cycle' => CronManager::describe($job)])->all();
         }
 
         if ($name === 'get_cron_log') {
@@ -60,7 +60,21 @@ class CronTools extends ToolGroup
             if (! CronManager::validSchedule($data['schedule']) || ! CronManager::validUser($data['run_as'])) {
                 return ['error' => 'Invalid cron expression or user'];
             }
-            $job = $job ? tap($job)->update($data) : CronJob::query()->create($data + ['is_active' => true]);
+            if ($job && $job->type !== 'shell' && self::a($a, 'command') !== null) {
+                return ['error' => 'Only the command of shell jobs can be changed here.'];
+            }
+            if ($job?->type === 'shell' || ! $job) {
+                if ($word = CronManager::forbidden((string) $data['command'])) {
+                    return ['error' => "The command contains a forbidden command: {$word}"];
+                }
+            } else {
+                unset($data['command']);
+            }
+            if (! $job || self::a($a, 'schedule') !== null) {
+                // a new expression replaces the execution cycles
+                $data['cycles'] = [CronManager::cycle(['type' => 'custom', 'expr' => $data['schedule']])];
+            }
+            $job = $job ? tap($job)->update($data) : CronJob::query()->create($data + ['type' => 'shell', 'is_active' => true]);
 
             return $this->shell($this->cron->sync(), "Cron job #{$job->id} saved") + ['id' => $job->id];
         }
@@ -78,8 +92,6 @@ class CronTools extends ToolGroup
                 return $this->shell($this->cron->sync(), 'Cron job '.$action.'d');
             })(),
             'run_now' => (function () use ($job) {
-                $job->update(['last_run_at' => now()]);
-
                 return $this->queued($this->cron->runNow($job), "Cron job #{$job->id}");
             })(),
             default => ['error' => 'Unknown action'],

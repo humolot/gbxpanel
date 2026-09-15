@@ -56,8 +56,19 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
 
         Route::get('/cron', [Controllers\CronController::class, 'index'])->name('cron');
         Route::post('/cron', [Controllers\CronController::class, 'store'])->name('cron.store');
+        Route::get('/cron/export', [Controllers\CronController::class, 'export'])->name('cron.export');
+        Route::post('/cron/import', [Controllers\CronController::class, 'import'])->name('cron.import');
+        Route::post('/cron/bulk', [Controllers\CronController::class, 'bulk'])->name('cron.bulk');
+        Route::post('/cron/scripts', [Controllers\CronController::class, 'scriptStore'])->name('cron.scripts.store');
+        Route::get('/cron/scripts/{script}', [Controllers\CronController::class, 'scriptShow'])->name('cron.scripts.show');
+        Route::put('/cron/scripts/{script}', [Controllers\CronController::class, 'scriptUpdate'])->name('cron.scripts.update');
+        Route::delete('/cron/scripts/{script}', [Controllers\CronController::class, 'scriptDestroy'])->name('cron.scripts.destroy');
+        Route::post('/cron/scripts/{script}/run', [Controllers\CronController::class, 'scriptRun'])->name('cron.scripts.run');
+        Route::get('/cron/scripts/{script}/log', [Controllers\CronController::class, 'scriptLog'])->name('cron.scripts.log');
+        Route::get('/cron/{cron}', [Controllers\CronController::class, 'show'])->name('cron.show')->whereNumber('cron');
         Route::put('/cron/{cron}', [Controllers\CronController::class, 'update'])->name('cron.update');
         Route::delete('/cron/{cron}', [Controllers\CronController::class, 'destroy'])->name('cron.destroy');
+        Route::post('/cron/{cron}/toggle', [Controllers\CronController::class, 'toggle'])->name('cron.toggle');
         Route::post('/cron/{cron}/run', [Controllers\CronController::class, 'run'])->name('cron.run');
         Route::get('/cron/{cron}/log', [Controllers\CronController::class, 'log'])->name('cron.log');
         Route::delete('/cron/{cron}/log', [Controllers\CronController::class, 'clearLog'])->name('cron.log.clear');
