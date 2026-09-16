@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\TuningController;
 use App\Services\PhpManager;
 use App\Services\SoftwareManager;
 use App\Services\TaskRunner;
@@ -13,7 +14,7 @@ class SoftwareController extends Controller
 
     public function index()
     {
-        return view('home.software');
+        return view('home.software', ['tuningTargets' => TuningController::targets()]);
     }
 
     public function data(Request $request)

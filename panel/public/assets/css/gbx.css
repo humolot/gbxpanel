@@ -196,6 +196,10 @@ a.stat-tile:hover { border-color: var(--gbx-border-strong); transform: translate
 .soft-card .soft-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--gbx-surface-3); display: grid; place-items: center; font-size: 1.2rem; }
 .soft-card h4 { font-size: .9rem; margin: 0; font-weight: 600; }
 .soft-card p { color: var(--gbx-muted); font-size: .78rem; margin: 0; flex: 1; }
+.soft-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.soft-actions > .btn { flex: 1 1 auto; min-width: max-content; white-space: nowrap; }
+.soft-actions > .btn-icon { flex: 0 0 auto; }
+@media (max-width: 420px) { .soft-actions > .btn:not(.btn-icon) { flex-basis: 100%; } }
 .soft-mini { display: flex; align-items: center; gap: .7rem; padding: .8rem .9rem; border: 1px solid var(--gbx-border); border-radius: 9px; background: var(--gbx-surface-2); height: 100%; }
 .soft-mini .soft-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--gbx-surface-3); display: grid; place-items: center; }
 .soft-mini .name { font-size: .83rem; font-weight: 600; }

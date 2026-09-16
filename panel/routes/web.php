@@ -441,6 +441,12 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
 
         Route::get('/home/updates', [Controllers\DashboardController::class, 'updates'])->name('home.updates');
 
+        // Performance settings of PHP-FPM, Apache and MySQL
+        Route::get('/tuning/{target}', [Controllers\TuningController::class, 'show'])->name('tuning.show');
+        Route::post('/tuning/{target}', [Controllers\TuningController::class, 'save'])->name('tuning.save');
+        Route::post('/tuning/{target}/restart', [Controllers\TuningController::class, 'restart'])->name('tuning.restart');
+        Route::post('/tuning/{target}/functions', [Controllers\TuningController::class, 'functions'])->name('tuning.functions');
+
         // API: keys, webhooks, call log and documentation
         Route::get('/api-access', [Controllers\ApiAccessController::class, 'index'])->name('api.index');
         Route::get('/api-access/keys', [Controllers\ApiAccessController::class, 'keys'])->name('api.keys');
