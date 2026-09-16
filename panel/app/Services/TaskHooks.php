@@ -132,8 +132,40 @@ class TaskHooks
                     app(ClamAvManager::class)->finalize($scan, $task);
                 }
             }
+            self::notify($task);
         } catch (\Throwable $e) {
             report($e);
+        }
+    }
+
+    /** Tell the webhooks what happened, with a separate event for backups. */
+    protected static function notify(Task $task): void
+    {
+        $failed = $task->status === 'failed';
+        $payload = [
+            'id' => $task->id,
+            'type' => $task->type,
+            'title' => $task->title,
+            'status' => $task->status,
+            'exit_code' => $task->exit_code,
+            'client_id' => $task->client_id,
+            'finished_at' => $task->finished_at?->toIso8601String(),
+        ];
+        \App\Services\Api\WebhookManager::event($failed ? 'task.failed' : 'task.finished', $payload);
+        if ($task->type === 'backup') {
+            \App\Services\Api\WebhookManager::event($failed ? 'backup.failed' : 'backup.finished', $payload + ['file' => ($task->meta ?? [])['file'] ?? null]);
+        }
+        if (($task->meta['on_success'] ?? null) === 'ssl_issued' && ! $failed) {
+            $site = Website::query()->find($task->meta['website_id'] ?? 0);
+            if ($site) {
+                \App\Services\Api\WebhookManager::event('ssl.issued', ['website_id' => $site->id, 'domain' => $site->domain, 'expires_at' => $site->fresh()->ssl_expires_at?->toIso8601String()]);
+            }
+        }
+        if (($task->meta['on_finish'] ?? null) === 'malware_scan' && ! $failed) {
+            $scan = MalwareScan::query()->find($task->meta['malware_scan_id'] ?? 0);
+            if ($scan && $scan->infected > 0) {
+                \App\Services\Api\WebhookManager::event('malware.detected', ['scan_id' => $scan->id, 'path' => $scan->path, 'infected' => $scan->infected, 'files' => $scan->files]);
+            }
         }
     }
 

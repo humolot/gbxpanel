@@ -7,6 +7,7 @@ use App\Models\MysqlDatabase;
 use App\Models\Setting;
 use App\Models\Website;
 use App\Services\ApacheManager;
+use App\Services\Api\WebhookManager;
 use App\Services\BackupManager;
 use App\Services\FileManager;
 use App\Services\FtpManager;
@@ -138,6 +139,8 @@ class WebsiteController extends Controller
 
         $this->audit('website', "Created website {$site->domain}", $root);
 
+        WebhookManager::event('website.created', ['id' => $site->id, 'domain' => $site->domain, 'php_version' => $site->php_version, 'root_path' => $site->root_path]);
+
         return $this->ok('Website created', $extra + ['id' => $site->id]);
     }
 
@@ -224,6 +227,7 @@ class WebsiteController extends Controller
         }
         $website->save();
         $this->audit('website', ($website->status === 'active' ? 'Started' : 'Stopped')." website {$website->domain}");
+        WebhookManager::event('website.status', ['id' => $website->id, 'domain' => $website->domain, 'status' => $website->status]);
 
         return $this->ok($website->status === 'active' ? 'Website started' : 'Website stopped', ['status' => $website->status]);
     }
@@ -252,6 +256,8 @@ class WebsiteController extends Controller
         $domain = $website->domain;
         $website->delete();
         $this->audit('website', "Deleted website {$domain}");
+
+        WebhookManager::event('website.deleted', ['id' => $website->id, 'domain' => $website->domain]);
 
         return $this->ok('Website deleted');
     }

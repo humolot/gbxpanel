@@ -23,6 +23,10 @@ Schedule::command('gbx:backup-databases --scheduled')->dailyAt(Setting::get('db_
     ->when(fn () => (bool) Setting::get('db_backup_enabled', false));
 Schedule::command('gbx:backup-databases --purge-recycle')->dailyAt('04:10');
 
+// Webhooks of the API: deliveries waiting for another attempt, and old history
+Schedule::command('gbx:webhooks --retry')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('gbx:webhooks --purge')->dailyAt('04:40');
+
 // Backup storages: interrupted transfers, transfer history and the space used at every destination
 Schedule::command('gbx:backup-housekeeping')->hourlyAt(12);
 Schedule::command('gbx:backup-housekeeping --usage')->dailyAt('05:40');

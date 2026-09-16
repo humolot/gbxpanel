@@ -508,6 +508,16 @@ class TransferManager
         if (! $ok) {
             ActivityLog::record('backup', 'Transfer failed: '.basename($transfer->local_path), mb_substr((string) $transfer->message, 0, 1000));
         }
+        \App\Services\Api\WebhookManager::event($ok ? 'transfer.finished' : 'transfer.failed', [
+            'id' => $transfer->id,
+            'direction' => $transfer->direction,
+            'file' => basename($transfer->local_path),
+            'remote_path' => $transfer->remote_path,
+            'storage' => $transfer->storage?->name,
+            'size' => $transfer->size,
+            'status' => $transfer->status,
+            'message' => $transfer->message,
+        ]);
         $webhook = trim((string) Setting::get('backup_webhook', ''));
         if ($webhook === '' || ($ok && ! Setting::get('backup_webhook_success', false))) {
             return;

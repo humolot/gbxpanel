@@ -439,6 +439,24 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::post('/clients/{client}/resources', [Controllers\ClientController::class, 'assign'])->name('clients.assign');
         Route::post('/clients/{client}/login', [Controllers\Client\ClientAuthController::class, 'impersonate'])->name('clients.impersonate');
 
+        // API: keys, webhooks, call log and documentation
+        Route::get('/api-access', [Controllers\ApiAccessController::class, 'index'])->name('api.index');
+        Route::get('/api-access/keys', [Controllers\ApiAccessController::class, 'keys'])->name('api.keys');
+        Route::post('/api-access/keys', [Controllers\ApiAccessController::class, 'keyStore'])->name('api.keys.store');
+        Route::put('/api-access/keys/{key}', [Controllers\ApiAccessController::class, 'keyUpdate'])->name('api.keys.update');
+        Route::delete('/api-access/keys/{key}', [Controllers\ApiAccessController::class, 'keyDestroy'])->name('api.keys.destroy');
+        Route::post('/api-access/keys/{key}/toggle', [Controllers\ApiAccessController::class, 'keyToggle'])->name('api.keys.toggle');
+        Route::post('/api-access/keys/{key}/rotate', [Controllers\ApiAccessController::class, 'keyRotate'])->name('api.keys.rotate');
+        Route::get('/api-access/webhooks', [Controllers\ApiAccessController::class, 'webhooks'])->name('api.webhooks');
+        Route::post('/api-access/webhooks', [Controllers\ApiAccessController::class, 'webhookStore'])->name('api.webhooks.store');
+        Route::put('/api-access/webhooks/{webhook}', [Controllers\ApiAccessController::class, 'webhookUpdate'])->name('api.webhooks.update');
+        Route::delete('/api-access/webhooks/{webhook}', [Controllers\ApiAccessController::class, 'webhookDestroy'])->name('api.webhooks.destroy');
+        Route::post('/api-access/webhooks/{webhook}/test', [Controllers\ApiAccessController::class, 'webhookTest'])->name('api.webhooks.test');
+        Route::post('/api-access/webhooks/{webhook}/secret', [Controllers\ApiAccessController::class, 'webhookSecret'])->name('api.webhooks.secret');
+        Route::get('/api-access/webhooks/{webhook}/deliveries', [Controllers\ApiAccessController::class, 'webhookDeliveries'])->name('api.webhooks.deliveries');
+        Route::get('/api-access/logs', [Controllers\ApiAccessController::class, 'logs'])->name('api.logs');
+        Route::post('/api-access/logs/clear', [Controllers\ApiAccessController::class, 'clearLogs'])->name('api.logs.clear');
+
         // Backup: remote storages (rclone) and the transfers between them
         Route::get('/backup', [Controllers\BackupController::class, 'index'])->name('backup.index');
         Route::post('/backup/settings', [Controllers\BackupController::class, 'saveSettings'])->name('backup.settings');

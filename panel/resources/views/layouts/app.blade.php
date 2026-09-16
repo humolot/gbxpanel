@@ -13,6 +13,7 @@
         ['route' => 'logs.index', 'match' => 'logs.*', 'icon' => 'bi-journal-text', 'label' => 'Logs'],
         ['route' => 'terminal.index', 'match' => 'terminal.*', 'icon' => 'bi-terminal', 'label' => 'Terminal', 'admin' => true],
         ['route' => 'backup.index', 'match' => 'backup.*', 'icon' => 'bi-cloud-arrow-up', 'label' => 'Backup', 'admin' => true],
+        ['route' => 'api.index', 'match' => 'api.*', 'icon' => 'bi-plug', 'label' => 'API', 'admin' => true],
         ['route' => 'clients.index', 'match' => 'clients.*', 'icon' => 'bi-person-badge', 'label' => 'Clients', 'admin' => true],
         ['route' => 'accounts.index', 'match' => 'accounts.*', 'icon' => 'bi-people', 'label' => 'Accounts', 'admin' => true],
         ['route' => 'ai.index', 'match' => 'ai.*', 'icon' => 'bi-stars', 'label' => 'AI'],

@@ -7,6 +7,7 @@ use App\Models\DbServer;
 use App\Models\MysqlDatabase;
 use App\Models\Setting;
 use App\Models\Website;
+use App\Services\Api\WebhookManager;
 use App\Services\Databases\DatabaseEngine;
 use App\Services\Databases\Engines;
 use App\Services\Databases\MongoEngine;
@@ -171,11 +172,13 @@ class DatabaseController extends Controller
             return $this->fail($result->message());
         }
 
-        MysqlDatabase::query()->create([
+        $record = MysqlDatabase::query()->create([
             'engine' => $db->key(), 'server_id' => $server?->id, 'name' => $data['name'], 'username' => $data['username'], 'password' => $data['password'],
             'host' => $hosts ? implode(',', $hosts) : 'localhost', 'charset' => $data['charset'] ?? 'utf8mb4', 'website_id' => $data['website_id'] ?? null, 'notes' => $data['notes'] ?? null,
         ]);
         $this->audit('database', "Created {$db->label()} database {$data['name']}", 'user '.$data['username'].($server ? ' on '.$server->label() : ''));
+
+        WebhookManager::event('database.created', ['id' => $record->id, 'engine' => $record->engine, 'name' => $record->name, 'username' => $record->username, 'website_id' => $record->website_id]);
 
         return $this->ok('Database created');
     }

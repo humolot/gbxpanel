@@ -1,0 +1,24 @@
+/* GBX Panel - API module */
+.api-table td { vertical-align: middle; }
+.api-table .cell-strong { font-weight: 600; }
+.api-scope { display: inline-block; padding: .05rem .35rem; margin: .1rem .15rem .1rem 0; border-radius: 4px; font-family: var(--gbx-mono); font-size: .68rem; color: var(--gbx-text-2); background: var(--gbx-surface-3); border: 1px solid var(--gbx-border-strong); }
+.api-scopes-cell { max-width: 320px; }
+.api-method { display: inline-block; min-width: 58px; text-align: center; padding: .05rem .35rem; border-radius: 4px; font-family: var(--gbx-mono); font-size: .68rem; font-weight: 600; background: var(--gbx-surface-3); border: 1px solid var(--gbx-border-strong); color: var(--gbx-text-2); }
+.api-get { color: #6aa7ff; border-color: rgba(106, 167, 255, .35); }
+.api-post { color: #3ecf8e; border-color: rgba(62, 207, 142, .35); }
+.api-patch, .api-put { color: #f5b454; border-color: rgba(245, 180, 84, .35); }
+.api-delete { color: #e08a92; border-color: rgba(224, 138, 146, .35); }
+.api-group-title { margin: 1.2rem 0 .5rem; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gbx-muted); }
+.api-endpoints td { padding-top: .5rem; padding-bottom: .5rem; }
+.api-params { display: flex; flex-wrap: wrap; gap: .1rem 1rem; margin-top: .2rem; }
+.api-params span span.font-mono { color: var(--gbx-text-2); }
+.api-code { margin: 0; padding: .9rem 1rem; background: var(--gbx-surface-2); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); font-family: var(--gbx-mono); font-size: .76rem; line-height: 1.6; color: var(--gbx-text-2); overflow-x: auto; }
+.api-scopes { max-height: 320px; overflow-y: auto; padding: .6rem .8rem; background: var(--gbx-surface-2); border: 1px solid var(--gbx-border); border-radius: var(--gbx-radius); }
+.api-scope-group { margin-bottom: .6rem; }
+.api-scope-title { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--gbx-muted); margin-bottom: .2rem; }
+.api-secret { padding: .6rem .7rem; margin-top: .4rem; background: var(--gbx-surface-3); border: 1px solid var(--gbx-border-strong); border-radius: 8px; font-size: .78rem; word-break: break-all; text-align: left; }
+.gbx-chip.chip-danger { border-color: rgba(224, 138, 146, .4); color: #e08a92; }
+.gbx-chip.chip-danger i { color: #e08a92; }
+@media (max-width: 767.98px) {
+    .api-scopes-cell { max-width: 180px; }
+}

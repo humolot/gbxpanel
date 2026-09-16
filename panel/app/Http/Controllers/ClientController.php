@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\ClientPackage;
 use App\Models\Setting;
+use App\Services\Api\WebhookManager;
 use App\Services\Clients\ClientManager;
 use App\Services\SoftwareManager;
 use App\Services\SystemStats;
@@ -99,6 +100,7 @@ class ClientController extends Controller
         $client = Client::query()->create($this->validated($request) + ['status' => 'active']);
         ClientManager::forgetPortalCache();
         $this->audit('client', "Created client {$client->username}", $client->package?->name);
+        WebhookManager::event('client.created', ['id' => $client->id, 'username' => $client->username, 'email' => $client->email, 'package' => $client->package?->name]);
 
         return $this->ok('Client account created', ['id' => $client->id]);
     }
@@ -130,12 +132,16 @@ class ClientController extends Controller
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:190']]);
         $this->clients->suspend($client, ($data['reason'] ?? '') ?: 'Suspended by the administrator');
 
+        WebhookManager::event('client.suspended', ['id' => $client->id, 'username' => $client->username, 'reason' => ($data['reason'] ?? '') ?: 'Suspended by the administrator']);
+
         return $this->ok("{$client->username} suspended: websites stopped and FTP disabled");
     }
 
     public function unsuspend(Client $client)
     {
         $this->clients->unsuspend($client);
+
+        WebhookManager::event('client.unsuspended', ['id' => $client->id, 'username' => $client->username]);
 
         return $this->ok("{$client->username} reactivated");
     }
