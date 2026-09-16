@@ -439,6 +439,8 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::post('/clients/{client}/resources', [Controllers\ClientController::class, 'assign'])->name('clients.assign');
         Route::post('/clients/{client}/login', [Controllers\Client\ClientAuthController::class, 'impersonate'])->name('clients.impersonate');
 
+        Route::get('/home/updates', [Controllers\DashboardController::class, 'updates'])->name('home.updates');
+
         // API: keys, webhooks, call log and documentation
         Route::get('/api-access', [Controllers\ApiAccessController::class, 'index'])->name('api.index');
         Route::get('/api-access/keys', [Controllers\ApiAccessController::class, 'keys'])->name('api.keys');

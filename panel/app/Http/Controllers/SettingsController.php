@@ -203,7 +203,14 @@ class SettingsController extends Controller
         return match ($action) {
             'reboot' => $this->result($this->panel->reboot(), 'The server will reboot in a few seconds.', 'system'),
             'restart_panel' => $this->result($this->panel->restartPanel(), 'Panel services are restarting.', 'system'),
-            'update_system' => $this->task(TaskRunner::dispatch('Update system packages', $this->panel->updateSystemScript(), 'system'), 'System update started'),
+            'update_system' => $this->task(
+                TaskRunner::dispatch(
+                    $request->boolean('full') ? 'Full system update' : 'Update system packages',
+                    $this->panel->updateSystemScript($request->boolean('full')),
+                    'system'
+                ),
+                $request->boolean('full') ? 'Full update started' : 'System update started'
+            ),
             'clear_cache' => $this->clearCache(),
             default => $this->fail('Unknown action'),
         };

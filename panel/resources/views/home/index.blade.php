@@ -20,13 +20,45 @@
             </div>
             @if (auth()->user()->isAdmin())
                 <div class="d-flex flex-wrap gap-2">
-                    <button class="btn btn-sm btn-outline-secondary" data-post="{{ route('settings.action') }}" data-payload='{"action":"update_system"}' data-confirm="Run apt update and upgrade all packages now?"><i class="bi bi-cloud-arrow-down"></i> Update <span class="badge badge-warning ms-1 d-none" id="updatesBadge"></span></button>
+                    <button class="btn btn-sm btn-outline-secondary" id="updatesOpen"><i class="bi bi-cloud-arrow-down"></i> Update <span class="badge badge-warning ms-1 d-none" id="updatesBadge"></span></button>
                     <button class="btn btn-sm btn-outline-secondary" data-post="{{ route('settings.action') }}" data-payload='{"action":"restart_panel"}' data-confirm="Restart the panel services? The page may be unavailable for a few seconds."><i class="bi bi-arrow-clockwise"></i> Restart panel</button>
                     <button class="btn btn-sm btn-outline-danger" data-post="{{ route('settings.action') }}" data-payload='{"action":"reboot"}' data-confirm="Reboot the server now? All services will be unavailable until it comes back." data-danger data-confirm-text="Reboot"><i class="bi bi-power"></i> Reboot</button>
                 </div>
             @endif
         </div>
         <div class="alert alert-warning m-3 mt-0 py-2 d-none" id="rebootAlert"><i class="bi bi-exclamation-triangle me-1"></i> A system update requires a reboot to complete.</div>
+    @if (auth()->user()->isAdmin())
+        @push('modals')
+            <div class="modal fade" id="updatesModal" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-cloud-arrow-down"></i> System updates</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <button class="btn btn-primary btn-sm" id="updatesRun"><i class="bi bi-download"></i> Update</button>
+                                <button class="btn btn-outline-warning btn-sm" id="updatesRunFull"><i class="bi bi-box-arrow-down"></i> Full update</button>
+                                <button class="btn btn-outline-secondary btn-sm ms-auto" id="updatesRefresh"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                            </div>
+                            <div class="cell-sub mb-2" id="updatesHint"></div>
+                            <table class="table table-sm db-table mb-0">
+                                <thead><tr><th>Package</th><th>Installed</th><th>Available</th><th>Source</th></tr></thead>
+                                <tbody id="updatesList"></tbody>
+                            </table>
+                            <ul class="sm-hints">
+                                <li><strong>Update</strong> installs what can be replaced without touching anything else.</li>
+                                <li><strong>Full update</strong> also installs packages that need new dependencies or a new kernel, and may remove packages that were replaced. It is the one that clears a list that keeps coming back.</li>
+                                <li>Ubuntu rolls some updates out gradually: a package can stay in the list for a few days even after a full update, until your server is included.</li>
+                                <li>A new kernel only takes effect after a reboot.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endpush
+    @endif
     </div>
 
     {{-- System status --}}
@@ -265,6 +297,45 @@ $(function () {
     });
 
     $.getJSON(@json(route('home.processes.data'))).done(function (r) { $('#tileProcs').text(r.data.length); });
+
+    @if (auth()->user()->isAdmin())
+    // pending packages, with the ones a regular update leaves behind
+    var loadUpdates = function () {
+        $('#updatesList').html('<tr><td colspan="4" class="sm-empty"><i class="bi bi-arrow-repeat spin"></i> Reading the package list</td></tr>');
+        $.getJSON(@json(route('home.updates'))).done(function (u) {
+            $('#updatesBadge').text(u.count).toggleClass('d-none', !u.count);
+            $('#rebootAlert').toggleClass('d-none', !u.reboot_required);
+            $('#updatesHint').html(u.count
+                ? u.count + ' package(s) waiting' + (u.security ? ', <span class="text-warning">' + u.security + ' with security fixes</span>' : '') +
+                  (u.held.length ? ' &middot; <span class="text-warning">' + u.held.length + ' kept back by a regular update</span>' : '')
+                : 'Everything is up to date.');
+            $('#updatesList').html(u.packages.length ? u.packages.map(function (p) {
+                return '<tr><td class="font-mono small">' + GBX.escape(p.name) + (p.held ? ' <span class="badge badge-warning">kept back</span>' : '') + '</td>' +
+                    '<td class="font-mono small cell-sub">' + GBX.escape(p.current) + '</td>' +
+                    '<td class="font-mono small">' + GBX.escape(p.candidate) + '</td>' +
+                    '<td class="small">' + GBX.escape(p.source) + (p.security ? ' <span class="badge badge-danger">security</span>' : '') + '</td></tr>';
+            }).join('') : '<tr><td colspan="4" class="sm-empty"><i class="bi bi-check2-circle"></i> Nothing to update</td></tr>');
+        });
+    };
+    $('#updatesOpen').on('click', function () {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('updatesModal')).show();
+        loadUpdates();
+    });
+    $('#updatesRefresh').on('click', loadUpdates);
+    $('#updatesRun, #updatesRunFull').on('click', function () {
+        var full = this.id === 'updatesRunFull';
+        GBX.confirm({
+            title: full ? 'Full update' : 'Update packages',
+            text: full
+                ? 'Installs every pending package, including new kernels and packages that need new dependencies; some replaced packages may be removed. A reboot may be needed afterwards.'
+                : 'Installs the packages that can be replaced on their own. Packages that need new dependencies stay in the list.',
+            danger: full, confirmText: full ? 'Run full update' : 'Update'
+        }).then(function (r) {
+            if (!r.isConfirmed) return;
+            GBX.post(@json(route('settings.action')), { action: 'update_system', full: full ? 1 : 0 }, { onTaskDone: loadUpdates });
+        });
+    });
+    @endif
 });
 </script>
 @endpush

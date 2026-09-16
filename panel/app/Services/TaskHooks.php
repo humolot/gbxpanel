@@ -132,6 +132,11 @@ class TaskHooks
                     app(ClamAvManager::class)->finalize($scan, $task);
                 }
             }
+            // the home page counts pending updates: refresh it as soon as an update finishes
+            if ($task->type === 'system') {
+                \Illuminate\Support\Facades\Cache::forget('gbx.home.extra');
+            }
+
             self::notify($task);
         } catch (\Throwable $e) {
             report($e);

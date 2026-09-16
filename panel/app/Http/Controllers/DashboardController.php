@@ -49,4 +49,12 @@ class DashboardController extends Controller
 
         return response()->json(['software' => $installed] + $extra);
     }
+
+    /** Pending packages, read fresh (the home page caches only the count). */
+    public function updates(PanelManager $panel)
+    {
+        Cache::forget('gbx.home.extra');
+
+        return response()->json($panel->updates() + ['reboot_required' => $panel->rebootRequired()]);
+    }
 }

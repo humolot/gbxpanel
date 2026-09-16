@@ -101,18 +101,78 @@ class PanelManager
         return Shell::out('timedatectl show -p Timezone --value', 10, false) ?: 'UTC';
     }
 
-    public function updateSystemScript(): string
+    /**
+     * Regular update ("upgrade") or full update ("dist-upgrade").
+     *
+     * A regular update never installs a package that needs new dependencies or that would remove
+     * something, and never installs a new kernel: those stay listed as pending. The full update
+     * takes them too, which is why it is a separate button with its own warning.
+     */
+    public function updateSystemScript(bool $full = false): string
     {
-        return "export DEBIAN_FRONTEND=noninteractive\napt-get update -y\napt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y\napt-get autoremove -y\n[ -f /var/run/reboot-required ] && echo 'NOTICE: a reboot is required to finish the update.' || true";
+        $command = $full ? 'dist-upgrade' : 'upgrade';
+
+        return "export DEBIAN_FRONTEND=noninteractive\napt-get update -y\n"
+            ."apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold {$command} -y\n"
+            ."apt-get autoremove -y\n"
+            ."echo; echo '== Still pending =='; apt list --upgradable 2>/dev/null | grep upgradable || echo 'nothing'\n"
+            ."[ -f /var/run/reboot-required ] && echo 'NOTICE: a reboot is required to finish the update.' || true";
+    }
+
+    /**
+     * Packages waiting to be installed. "held" marks the ones a regular update leaves behind
+     * (new dependencies, kernels, or an update Ubuntu is still rolling out gradually).
+     *
+     * @return array{count: int, security: int, held: list<string>, packages: list<array{name: string, current: string, candidate: string, source: string, security: bool, held: bool}>}
+     */
+    public function updates(): array
+    {
+        if (Shell::simulating()) {
+            $packages = [
+                ['name' => 'openssl', 'current' => '3.0.13-0ubuntu3.1', 'candidate' => '3.0.13-0ubuntu3.4', 'source' => 'noble-security', 'security' => true, 'held' => false],
+                ['name' => 'curl', 'current' => '8.5.0-2ubuntu10.1', 'candidate' => '8.5.0-2ubuntu10.6', 'source' => 'noble-updates', 'security' => false, 'held' => false],
+                ['name' => 'linux-image-generic', 'current' => '6.8.0-45.45', 'candidate' => '6.8.0-52.53', 'source' => 'noble-updates', 'security' => false, 'held' => true],
+            ];
+
+            return ['count' => count($packages), 'security' => 1, 'held' => ['linux-image-generic'], 'packages' => $packages];
+        }
+
+        $packages = [];
+        foreach (Shell::run('apt list --upgradable 2>/dev/null', 60, null, false)->lines() as $line) {
+            if (! preg_match('#^([^/\s]+)/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from:\s*([^\]]+)\]#', trim($line), $m)) {
+                continue;
+            }
+            $packages[] = [
+                'name' => $m[1],
+                'source' => $m[2],
+                'candidate' => $m[3],
+                'current' => trim($m[4]),
+                'security' => str_contains($m[2], 'security'),
+                'held' => false,
+            ];
+        }
+
+        // what a regular update would leave behind
+        $held = [];
+        if ($packages && preg_match('/kept back:\s*\R((?:[ \t]+\S.*\R)+)/', Shell::run('apt-get -s upgrade 2>/dev/null', 120, null, false)->output, $m)) {
+            $held = array_values(array_filter(preg_split('/\s+/', trim($m[1]))));
+        }
+        foreach ($packages as &$package) {
+            $package['held'] = in_array($package['name'], $held, true);
+        }
+        unset($package);
+
+        return [
+            'count' => count($packages),
+            'security' => count(array_filter($packages, fn ($p) => $p['security'])),
+            'held' => $held,
+            'packages' => $packages,
+        ];
     }
 
     public function pendingUpdates(): int
     {
-        if (Shell::simulating()) {
-            return 12;
-        }
-
-        return (int) Shell::out('apt list --upgradable 2>/dev/null | grep -c upgradable', 60, false);
+        return $this->updates()['count'];
     }
 
     public function rebootRequired(): bool
