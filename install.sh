@@ -178,6 +178,8 @@ START_TS=$(date +%s)
 # ------------------------------------------------------------------ 1. base packages
 step "Updating package lists and installing base packages"
 export DEBIAN_FRONTEND=noninteractive
+# wait for automatic updates instead of failing with "Could not get lock /var/lib/dpkg/lock-frontend"
+printf 'DPkg::Lock::Timeout "900";\n' >/etc/apt/apt.conf.d/99gbx-lock-timeout 2>/dev/null || true
 run apt-get update -y
 apt_install ca-certificates curl wget unzip zip tar git rsync gnupg lsb-release openssl sqlite3 acl python3 \
     cron supervisor ufw sudo software-properties-common apt-transport-https logrotate iproute2 procps

@@ -78,6 +78,6 @@ class PhpManager
             throw new \InvalidArgumentException('Invalid extension name');
         }
 
-        return "export DEBIAN_FRONTEND=noninteractive\napt-get install -y php{$version}-{$extension}\nsystemctl restart php{$version}-fpm";
+        return Apt::guard("apt-get install -y php{$version}-{$extension}\nsystemctl restart php{$version}-fpm");
     }
 }

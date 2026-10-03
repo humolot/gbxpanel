@@ -288,7 +288,7 @@ case "$(uname -m)" in
   armv7l) ARCH=arm-v7 ;;
   *) echo "Unsupported architecture $(uname -m)"; exit 1 ;;
 esac
-command -v unzip >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
+command -v unzip >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=900 install -y unzip
 VERSION=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}')
 case "$VERSION" in v[0-9]*) ;; *) echo "Could not read the current rclone version"; exit 1 ;; esac
 TMP=$(mktemp -d)

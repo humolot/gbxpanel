@@ -112,7 +112,7 @@ class PanelManager
     {
         $command = $full ? 'dist-upgrade' : 'upgrade';
 
-        return "export DEBIAN_FRONTEND=noninteractive\napt-get update -y\n"
+        return Apt::preamble()."apt-get update -y\n"
             ."apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold {$command} -y\n"
             ."apt-get autoremove -y\n"
             ."echo; echo '== Still pending =='; apt list --upgradable 2>/dev/null | grep upgradable || echo 'nothing'\n"

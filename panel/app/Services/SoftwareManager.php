@@ -88,7 +88,7 @@ class SoftwareManager
         $this->assertVersion($item, $version);
         Cache::forget('gbx.software');
 
-        return TaskRunner::dispatch('Install '.$item['name'].($version ? ' '.$version : ''), $this->fill($item['install'], $version), 'software', ['package' => $key, 'version' => $version]);
+        return TaskRunner::dispatch('Install '.$item['name'].($version ? ' '.$version : ''), Apt::guard($this->fill($item['install'], $version)), 'software', ['package' => $key, 'version' => $version]);
     }
 
     public function uninstall(string $key, ?string $version): Task
@@ -103,7 +103,7 @@ class SoftwareManager
         }
         Cache::forget('gbx.software');
 
-        return TaskRunner::dispatch('Uninstall '.$item['name'].($version ? ' '.$version : ''), $this->fill($item['uninstall'], $version), 'software', ['package' => $key, 'version' => $version]);
+        return TaskRunner::dispatch('Uninstall '.$item['name'].($version ? ' '.$version : ''), Apt::guard($this->fill($item['uninstall'], $version)), 'software', ['package' => $key, 'version' => $version]);
     }
 
     protected function assertVersion(array $item, ?string $version): void

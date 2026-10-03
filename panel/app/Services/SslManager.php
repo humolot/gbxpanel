@@ -30,7 +30,7 @@ class SslManager
         // (e.g. a www alias that was never created), so names are checked first: the main
         // domain must resolve, aliases without DNS are skipped with a warning.
         $script = "set -e\n"
-            ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y certbot; }\n"
+            ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=900 update -y; apt-get -o DPkg::Lock::Timeout=900 install -y certbot; }\n"
             ."resolves() { { getent ahosts \"\$1\" 2>/dev/null || true; } | awk '{print \$1}' | sort -u | tr '\\n' ' '; }\n"
             ."IPS=\$(resolves {$domain})\n"
             ."if [ -z \"\$IPS\" ]; then echo \"Error: {$site->domain} has no DNS record (A/AAAA). Point it to this server and try again.\"; exit 1; fi\n"
@@ -74,7 +74,7 @@ class SslManager
         $this->writeDnsHook();
         $args = implode(' ', array_map(fn ($n) => '-d '.Shell::arg($n), $names));
         $script = "set -e\n"
-            ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y certbot; }\n"
+            ."command -v certbot >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=900 update -y; apt-get -o DPkg::Lock::Timeout=900 install -y certbot; }\n"
             .'echo '.Shell::arg('DNS verification through '.$zone->provider->label().' for: '.implode(', ', $names))."\n"
             .($skipped ? 'echo '.Shell::arg('Warning: skipping aliases outside the managed DNS zones: '.implode(', ', $skipped))."\n" : '')
             .'certbot certonly --manual --preferred-challenges dns'

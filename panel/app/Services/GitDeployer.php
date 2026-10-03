@@ -127,7 +127,7 @@ class GitDeployer
         $safe = '-c safe.directory='.Shell::arg($site->root_path);
 
         $script = "set -e\n".$this->authEnv($site, (string) ($git['auth'] ?? 'public'))
-            ."command -v git >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null; apt-get install -y git >/dev/null; }\n"
+            ."command -v git >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=900 update -y >/dev/null; apt-get -o DPkg::Lock::Timeout=900 install -y git >/dev/null; }\n"
             ."mkdir -p {$root}\n"
             ."if [ -d {$root}/.git ]; then\n"
             ."    echo \"Updating {$site->root_path} from {$branch}\"\n"

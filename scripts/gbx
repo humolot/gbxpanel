@@ -99,6 +99,12 @@ ensure_self_signed() {
     chmod 600 "$SELF_KEY"
 }
 
+# Package installs fail with "Could not get lock /var/lib/dpkg/lock-frontend" when automatic
+# updates or another shell are using apt. This makes apt wait for them instead of giving up.
+ensure_apt_lock_timeout() {
+    printf 'DPkg::Lock::Timeout "900";\n' >/etc/apt/apt.conf.d/99gbx-lock-timeout 2>/dev/null || true
+}
+
 # rclone moves backups to the storages configured in Backup > Storage (object storage, Google
 # Drive, FTP, SFTP, WebDAV). Installed from the official release, checked against its SHA256SUMS.
 ensure_rclone() {
@@ -580,6 +586,7 @@ cmd_update() {
     chown -R "$GBX_USER:$GBX_USER" "$PANEL_DIR"
     (cd "$PANEL_DIR" && runuser -u "$GBX_USER" -- env HOME="$GBX_ROOT" COMPOSER_HOME="$GBX_ROOT/.composer" "$PHP_BIN" /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --no-progress) || die "composer install failed"
     artisan migrate --force
+    ensure_apt_lock_timeout
     ensure_rclone
     install -m 700 "$(dirname "$src")/scripts/gbx-terminal" "$TERM_BIN"
     rm -rf "$tmp"
