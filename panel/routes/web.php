@@ -57,6 +57,10 @@ Route::prefix('client')->name('client.')->group(function () {
         Route::post('/ftp/{ftp}/toggle', [Controllers\Client\ClientFtpController::class, 'toggle'])->name('ftp.toggle');
         Route::delete('/ftp/{ftp}', [Controllers\Client\ClientFtpController::class, 'destroy'])->name('ftp.destroy');
 
+        Route::get('/websites/{website}/manage', [Controllers\Client\ClientWebsiteSettingsController::class, 'manage'])->name('websites.manage');
+        Route::get('/websites/{website}/manage/{section}', [Controllers\Client\ClientWebsiteSettingsController::class, 'data'])->name('websites.manage.data');
+        Route::post('/websites/{website}/manage/{section}', [Controllers\Client\ClientWebsiteSettingsController::class, 'update'])->name('websites.manage.update');
+
         Route::get('/databases', [Controllers\Client\ClientDatabaseController::class, 'index'])->name('databases');
         Route::post('/databases', [Controllers\Client\ClientDatabaseController::class, 'store'])->name('databases.store');
         Route::get('/databases/{database}/credentials', [Controllers\Client\ClientDatabaseController::class, 'credentials'])->name('databases.credentials');

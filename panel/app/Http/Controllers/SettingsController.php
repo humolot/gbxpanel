@@ -18,6 +18,8 @@ class SettingsController extends Controller
     {
         return view('settings.index', [
             'info' => $stats->info(),
+            'serverIp' => (string) Setting::get('server_ip', ''),
+            'detectedIp' => $stats->detectPublicIp(),
             'port' => config('gbx.port'),
             'entry' => config('gbx.entry'),
             'title' => Setting::get('panel_title', 'GBX Panel'),
@@ -175,7 +177,14 @@ class SettingsController extends Controller
         $data = $request->validate([
             'hostname' => ['required', 'string', 'max:253'],
             'timezone' => ['required', 'string'],
-        ]);
+            'server_ip' => ['nullable', 'ip'],
+        ], ['server_ip.ip' => 'Enter a valid IPv4 or IPv6 address, or leave it empty to detect it.']);
+
+        // servers behind NAT only see their private address: the administrator can set the public one
+        Setting::put('server_ip', (string) ($data['server_ip'] ?? ''));
+        $this->panel->setEnv(['GBX_SERVER_IP' => (string) ($data['server_ip'] ?? '')]);
+        Cache::forget('gbx.public_ip');
+        Cache::forget('gbx.home.extra');
 
         $info = app(SystemStats::class)->info();
         if ($data['hostname'] !== $info['hostname']) {

@@ -1,12 +1,16 @@
 @php
-    $url = fn (string $section) => route('websites.manage.update', [$site, $section]);
+    // shared by the administrator and the client sub-panel: the client gets a smaller list of
+    // sections, cannot move the site directory and edits .htaccess in a plain text box
+    $url ??= fn (string $section) => route('websites.manage.update', [$site, $section]);
+    $lockRoot ??= false;
+    $plainEditors ??= false;
     $domains = array_merge([$site->domain], $site->aliasList());
     $git = (array) $site->setting('git', []);
     $gitAuth = $git['auth'] ?? 'public';
     $hotlink = (array) $site->setting('hotlink', []);
     $maintenance = (array) $site->setting('maintenance', []);
     $proxies = $site->proxies();
-    $sections = [
+    $allSections = [
         'domains' => ['bi-globe2', 'Domain Manager'],
         'directory' => ['bi-folder2', 'Directory'],
         'access' => ['bi-shield-lock', 'Limit access'],
@@ -22,6 +26,7 @@
         'hotlink' => ['bi-link-45deg', 'Hotlink Protection'],
         'maintenance' => ['bi-cone-striped', 'Maintenance Mode'],
     ];
+    $sections = isset($only) ? array_intersect_key($allSections, array_flip($only)) : $allSections;
     $fieldsetAttr = $readOnly ? 'disabled' : '';
 @endphp
 
@@ -38,6 +43,7 @@
         @endif
 
         {{-- ================================================= Domain Manager --}}
+        @if (isset($sections['domains']))
         <section class="sm-pane" data-pane="domains">
             <fieldset {{ $fieldsetAttr }}>
                 <form data-ajax data-keep-open data-success="siteSectionSaved" action="{{ $url('domains') }}" class="sm-add-row">
@@ -68,10 +74,13 @@
                 </table>
             </div>
         </section>
+        @endif
 
         {{-- ====================================================== Directory --}}
+        @if (isset($sections['directory']))
         <section class="sm-pane" data-pane="directory">
             <fieldset {{ $fieldsetAttr }}>
+                @unless ($lockRoot)
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('directory') }}" class="sm-row">
                     <label class="sm-label">Site directory</label>
                     <div class="sm-field">
@@ -83,6 +92,7 @@
                     </div>
                     <button class="btn btn-primary" type="submit">Save</button>
                 </form>
+                @endunless
 
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('directory') }}" class="sm-row">
                     <input type="hidden" name="action" value="run_path">
@@ -121,8 +131,10 @@
                 </div>
             </div>
         </section>
+        @endif
 
         {{-- =================================================== Limit access --}}
+        @if (isset($sections['access']))
         <section class="sm-pane" data-pane="access">
             <ul class="nav nav-pills gbx-pills mb-3">
                 <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#sm-auth" type="button">Password protection</button></li>
@@ -190,8 +202,10 @@
                 </div>
             </div>
         </section>
+        @endif
 
         {{-- ==================================================== URL rewrite --}}
+        @if (isset($sections['rewrite']))
         <section class="sm-pane" data-pane="rewrite">
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <select class="form-select w-auto" id="smRewriteTemplate" @disabled($readOnly)>
@@ -202,7 +216,11 @@
                 </select>
                 <span class="cell-sub font-mono ms-auto" id="smRewritePath"></span>
             </div>
-            <div class="sm-code" id="smRewriteEditor"></div>
+            @if ($plainEditors)
+                <textarea class="form-control font-mono sm-plain-code" id="smRewriteText" rows="16" spellcheck="false" @disabled($readOnly)></textarea>
+            @else
+                <div class="sm-code" id="smRewriteEditor"></div>
+            @endif
             <div class="d-flex gap-2 mt-2">
                 @unless ($readOnly)<button class="btn btn-primary" type="button" id="smRewriteSave"><i class="bi bi-check2"></i> Save</button>@endunless
                 <button class="btn btn-outline-secondary" type="button" id="smRewriteReload"><i class="bi bi-arrow-counterclockwise"></i> Reload</button>
@@ -214,8 +232,10 @@
             </ul>
             <script type="application/json" id="smTemplates">{!! json_encode(collect($templates)->map(fn ($t) => ['rules' => $t['rules'], 'hint' => $t['hint'] ?? null]), JSON_HEX_TAG) !!}</script>
         </section>
+        @endif
 
         {{-- =============================================== Default document --}}
+        @if (isset($sections['index']))
         <section class="sm-pane" data-pane="index">
             <fieldset {{ $fieldsetAttr }}>
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('index') }}">
@@ -229,8 +249,10 @@
             </fieldset>
             <ul class="sm-hints"><li>One file name per line. The first file found is served, e.g. put <code>index.html</code> first for static sites.</li></ul>
         </section>
+        @endif
 
         {{-- ========================================================= Config --}}
+        @if (isset($sections['config']))
         <section class="sm-pane" data-pane="config">
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                 <span class="cell-sub">Tips: Ctrl+F search, Ctrl+S save.</span>
@@ -246,8 +268,10 @@
                 <li>Changes made in the other tabs regenerate this file and replace manual edits.</li>
             </ul>
         </section>
+        @endif
 
         {{-- ============================================================ SSL --}}
+        @if (isset($sections['ssl']))
         <section class="sm-pane" data-pane="ssl">
             <ul class="nav nav-pills gbx-pills mb-3">
                 <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#sm-ssl-current" type="button">Current certificate</button></li>
@@ -339,8 +363,10 @@
                 </div>
             </div>
         </section>
+        @endif
 
         {{-- ==================================================== PHP version --}}
+        @if (isset($sections['php']))
         <section class="sm-pane" data-pane="php">
             <fieldset {{ $fieldsetAttr }}>
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('php') }}" class="d-flex gap-2 align-items-center flex-wrap">
@@ -366,8 +392,10 @@
                 <li>Choose the version your application requires; old versions (below 8.1) no longer receive security fixes.</li>
             </ul>
         </section>
+        @endif
 
         {{-- ==================================================== Git Manager --}}
+        @if (isset($sections['git']))
         <section class="sm-pane" data-pane="git">
             <div class="sm-git">
                 <div class="sm-git-head">
@@ -468,8 +496,10 @@
                 </div>
             @endif
         </section>
+        @endif
 
         {{-- ======================================================= Composer --}}
+        @if (isset($sections['composer']))
         <section class="sm-pane" data-pane="composer">
             <div class="sm-cert mb-3" id="smComposerInfo"><i class="bi bi-arrow-repeat spin"></i> Reading composer.json...</div>
             <fieldset {{ $fieldsetAttr }}>
@@ -505,8 +535,10 @@
             </fieldset>
             <ul class="sm-hints"><li>Composer runs with the website's PHP version ({{ $site->php_version ? 'PHP '.$site->php_version : 'system PHP' }}). The output opens in the task window.</li></ul>
         </section>
+        @endif
 
         {{-- ======================================================= Redirect --}}
+        @if (isset($sections['redirects']))
         <section class="sm-pane" data-pane="redirects">
             <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
                 @unless ($readOnly)<button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#smRedirectForm"><i class="bi bi-plus-lg"></i> Add redirect</button>@endunless
@@ -563,8 +595,10 @@
             </div>
             <ul class="sm-hints"><li>Browsers cache 301 redirects. Test with a private window after changing them.</li><li>Domain redirects send one of this website's domains to another address, e.g. old.com to https://new.com.</li></ul>
         </section>
+        @endif
 
         {{-- ================================================== Reverse proxy --}}
+        @if (isset($sections['proxy']))
         <section class="sm-pane" data-pane="proxy">
             @unless ($readOnly)
                 <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#smProxyForm"><i class="bi bi-plus-lg"></i> Add reverse proxy</button>
@@ -602,8 +636,10 @@
                 <li>A proxy for <code>/</code> serves the whole website (PHP is disabled); proxies for paths like <code>/api</code> keep PHP for the rest of the site.</li>
             </ul>
         </section>
+        @endif
 
         {{-- ============================================= Hotlink Protection --}}
+        @if (isset($sections['hotlink']))
         <section class="sm-pane" data-pane="hotlink">
             <fieldset {{ $fieldsetAttr }}>
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('hotlink') }}" class="row g-3">
@@ -627,8 +663,10 @@
             </fieldset>
             <ul class="sm-hints"><li>Other websites embedding these files receive 403 Forbidden, which saves bandwidth.</li></ul>
         </section>
+        @endif
 
         {{-- =============================================== Maintenance Mode --}}
+        @if (isset($sections['maintenance']))
         <section class="sm-pane" data-pane="maintenance">
             <fieldset {{ $fieldsetAttr }}>
                 <form data-ajax data-keep-open data-no-reset data-success="siteSectionSaved" action="{{ $url('maintenance') }}" class="row g-3">
@@ -649,5 +687,6 @@
             </fieldset>
             <ul class="sm-hints"><li>Visitors receive a maintenance page with HTTP 503, which tells search engines to come back later. SSL renewals keep working.</li></ul>
         </section>
+        @endif
     </div>
 </div>

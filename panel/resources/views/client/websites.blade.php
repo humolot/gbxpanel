@@ -60,6 +60,7 @@
                                 </td>
                                 <td class="small">{{ $site->databases_count }} / {{ $site->ftp_accounts_count }}</td>
                                 <td class="text-end text-nowrap db-ops">
+                                    <a href="#" class="site-conf">Settings</a>
                                     @if ($client->package?->allow_ssl)<a href="#" class="site-ssl">SSL</a>@endif
                                     <a href="#" class="site-logs">Logs</a>
                                     <a href="#" class="site-delete text-danger">Delete</a>
@@ -75,6 +76,19 @@
 @endsection
 
 @push('modals')
+    {{-- the same settings screens as the administrator, limited to what stays inside the website --}}
+    <div class="modal fade" id="confModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-sliders"></i> Settings <span class="cell-sub ms-2" id="confDomain"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="confBody"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="siteModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content" data-ajax data-reload action="{{ route('client.websites.store') }}">
@@ -160,6 +174,91 @@ $(function () {
             if (r.isConfirmed) GBX.post(base + '/' + $r.data('id') + '/ssl', { email: r.value }, { onTaskDone: function () { $(document).one('hidden.bs.modal', '#taskModal', function () { location.reload(); }); } });
         });
     });
+
+    /* ------------------------------------------------- website settings modal */
+    // the markup comes from the panel (the same screens the administrator sees), so the client
+    // only needs the small amount of behaviour those sections rely on
+    var conf = { id: null, tab: 'domains', rewriteOriginal: '' };
+
+    var showSection = function (section) {
+        conf.tab = section;
+        var $body = $('#confBody');
+        $body.find('.sm-nav-link').removeClass('active').filter('[data-section="' + section + '"]').addClass('active');
+        $body.find('.sm-pane').removeClass('active').filter('[data-pane="' + section + '"]').addClass('active');
+        if (section === 'directory') loadSubdirs();
+        if (section === 'rewrite') loadRewrite();
+    };
+
+    var loadConf = function () {
+        return GBX.get(base + '/' + conf.id + '/manage').done(function (r) {
+            $('#confDomain').text(r.title);
+            $('#confBody').html(r.html);
+            conf.rewriteOriginal = '';
+            showSection(conf.tab);
+        });
+    };
+
+    window.siteSectionSaved = function (res) {
+        if (res && res.task) return;
+        loadConf();
+    };
+
+    var loadSubdirs = function () {
+        var $sel = $('#confBody [data-subdirs]');
+        if (!$sel.length || $sel.data('loaded')) return;
+        $sel.data('loaded', true);
+        GBX.get(base + '/' + conf.id + '/manage/subdirs', {}, { silent: true }).done(function (r) {
+            var current = String($sel.data('current') || '');
+            $sel.html('<option value="">/</option>' + r.dirs.map(function (d) {
+                return '<option value="' + GBX.escape(d) + '"' + (d === current ? ' selected' : '') + '>/' + GBX.escape(d) + '</option>';
+            }).join(''));
+            if (current && r.dirs.indexOf(current) === -1) $sel.append('<option value="' + GBX.escape(current) + '" selected>/' + GBX.escape(current) + ' (missing)</option>');
+        });
+    };
+
+    var loadRewrite = function () {
+        var $text = $('#smRewriteText');
+        if (!$text.length || $text.data('loaded')) return;
+        $text.data('loaded', true);
+        GBX.get(base + '/' + conf.id + '/manage/rewrite').done(function (r) {
+            $('#smRewritePath').text(r.path);
+            conf.rewriteOriginal = r.content || '';
+            $text.val(conf.rewriteOriginal);
+        });
+    };
+
+    $('#confBody').on('click', '.sm-nav-link', function () { showSection($(this).data('section')); })
+        .on('change', '.sm-toggle', function () {
+            var $t = $(this);
+            GBX.post($t.data('url'), { action: $t.data('action'), enabled: this.checked ? 1 : 0 }).done(function (r) { toastr.success(r.message); });
+        })
+        .on('click', '[data-fill-index]', function () { $(this).closest('form').find('[name=files]').val($(this).data('fill-index')); })
+        .on('change', '#smRewriteTemplate', function () {
+            var templates = JSON.parse($('#smTemplates').text()), key = this.value;
+            $('#smRewriteText').val(key ? templates[key].rules : conf.rewriteOriginal);
+            var hint = key && templates[key].hint;
+            $('#smRewriteHint').toggleClass('d-none', !hint).html(hint ? '<strong>Note:</strong> ' + GBX.escape(hint) : '');
+        })
+        .on('click', '#smRewriteSave', function () {
+            var $b = $(this);
+            GBX.busy($b, true);
+            GBX.post(base + '/' + conf.id + '/manage/rewrite', { content: $('#smRewriteText').val() }).done(function (res) {
+                toastr.success(res.message);
+                conf.rewriteOriginal = $('#smRewriteText').val();
+                $('#smRewriteTemplate').val('');
+            }).always(function () { GBX.busy($b, false); });
+        })
+        .on('click', '#smRewriteReload', function () { $('#smRewriteText').data('loaded', false); loadRewrite(); });
+
+    $('.site-conf').on('click', function (e) {
+        e.preventDefault();
+        conf.id = row(this).data('id');
+        conf.tab = 'domains';
+        $('#confBody').html('<div class="sm-loading"><i class="bi bi-arrow-repeat spin"></i> Loading</div>');
+        bootstrap.Modal.getOrCreateInstance('#confModal').show();
+        loadConf();
+    });
+    $('#confModal').on('hidden.bs.modal', function () { if (conf.changed) location.reload(); });
 
     var logSite = null;
     var loadLog = function (type) {

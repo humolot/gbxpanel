@@ -406,6 +406,11 @@
 
         $('[data-bs-toggle="tooltip"]').each(function () { new bootstrap.Tooltip(this); });
 
+        // row menus live inside scrolling tables; without this the menu is cut off by the table
+        if (window.bootstrap && bootstrap.Dropdown && bootstrap.Dropdown.Default) {
+            bootstrap.Dropdown.Default.popperConfig = { strategy: 'fixed' };
+        }
+
         $('#tasksDropdown').on('show.bs.dropdown', GBX.refreshTaskBadge);
         $(document).on('click', '.task-open', function (e) {
             e.preventDefault();

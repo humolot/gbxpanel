@@ -58,7 +58,23 @@ class SystemStats
         ];
     }
 
+    /**
+     * Address other machines reach this server on. Servers behind NAT (and most Chinese and
+     * European clouds) see only their private address, so the administrator can set the right
+     * one in Settings > System; the panel uses it for DNS records, the access link and the
+     * firewall hints.
+     */
     public function publicIp(): string
+    {
+        $manual = trim((string) \App\Models\Setting::get('server_ip', ''));
+        if ($manual !== '' && filter_var($manual, FILTER_VALIDATE_IP)) {
+            return $manual;
+        }
+
+        return $this->detectPublicIp();
+    }
+
+    public function detectPublicIp(): string
     {
         return Cache::remember('gbx.public_ip', 3600, function () {
             if (Shell::simulating()) {

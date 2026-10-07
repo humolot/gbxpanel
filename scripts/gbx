@@ -74,7 +74,8 @@ is_true() { [[ "${1,,}" =~ ^(1|true|yes|on)$ ]]; }
 
 scheme() { is_true "$(env_get GBX_SSL)" && echo https || echo http; }
 
-public_ip() { curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}'; }
+# the administrator can set the address by hand (Settings > System) when the server is behind NAT
+public_ip() { local ip; ip="$(env_get GBX_SERVER_IP)"; [ -n "$ip" ] && { echo "$ip"; return; }; curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}'; }
 
 panel_host() { local d; d="$(env_get GBX_DOMAIN)"; [ -n "$d" ] && echo "$d" || public_ip; }
 

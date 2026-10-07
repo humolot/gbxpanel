@@ -230,6 +230,14 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Server address</label>
+                                    <div class="input-group">
+                                        <input type="text" name="server_ip" class="form-control font-mono" value="{{ $serverIp }}" placeholder="{{ $detectedIp }}" maxlength="45">
+                                        <button class="btn btn-outline-secondary" type="button" data-fill-ip="{{ $detectedIp }}" title="Use the detected address"><i class="bi bi-magic"></i></button>
+                                    </div>
+                                    <div class="form-text">Detected: <span class="font-mono">{{ $detectedIp }}</span>. Set it by hand when the server is behind NAT and the panel shows the wrong address. It is used for DNS records, the access link and the firewall hints.</div>
+                                </div>
                                 <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Save system settings</button></div>
                             </form>
                         </div>
@@ -285,6 +293,11 @@
 @endsection
 
 @push('scripts')
+<script>
+    $(document).on('click', '[data-fill-ip]', function () {
+        $(this).closest('.input-group').find('input').val($(this).data('fill-ip')).trigger('input');
+    });
+</script>
 <script>
 function panelSaved(res) {
     if (res.redirect) {
