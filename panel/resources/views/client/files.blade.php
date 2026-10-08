@@ -74,7 +74,7 @@ $(function () {
         extract: @json(route('client.files.extract')), compress: @json(route('client.files.compress'))
     };
     var esc = GBX.escape, path = @json($start), root = null, items = [], clip = null;
-    var editable = /\.(php|phtml|html?|css|scss|less|js|mjs|ts|json|xml|txt|md|ini|conf|env|htaccess|yml|yaml|sql|log|csv|svg|twig|vue|py|sh)$|^\.(htaccess|user\.ini|env)$/i;
+    var editable = new RegExp(@json(\App\Services\FileManager::EDITABLE_PATTERN), 'i');
     var archive = /\.(zip|tar\.gz|tgz|tar)$/i;
     var icons = { php: 'bi-filetype-php', js: 'bi-filetype-js', css: 'bi-filetype-css', html: 'bi-filetype-html', htm: 'bi-filetype-html', json: 'bi-filetype-json', zip: 'bi-file-zip', gz: 'bi-file-zip', png: 'bi-file-image', jpg: 'bi-file-image', jpeg: 'bi-file-image', gif: 'bi-file-image', svg: 'bi-filetype-svg', sql: 'bi-filetype-sql', txt: 'bi-file-text', md: 'bi-filetype-md', pdf: 'bi-file-pdf' };
     var ext = function (n) { return (n.split('.').pop() || '').toLowerCase(); };
@@ -123,7 +123,9 @@ $(function () {
         });
     };
 
-    var selected = function () { return $('.fm-check:checked').map(function () { return $(this).closest('tr').data('name') + ''; }).get(); };
+    // attr() instead of data(): jQuery would turn a name like "123" into a number
+    var rowName = function ($tr) { return String($tr.attr('data-name')); };
+    var selected = function () { return $('.fm-check:checked').map(function () { return rowName($(this).closest('tr')); }).get(); };
     var selection = function () {
         var n = selected().length;
         $('#fmSelInfo').text(n ? n + ' selected' : 'No selection');
@@ -149,13 +151,13 @@ $(function () {
 
     $('#fmBody').on('click', '.fm-open', function (e) {
         e.preventDefault();
-        var $tr = $(this).closest('tr'), name = $tr.data('name') + '';
+        var $tr = $(this).closest('tr'), name = rowName($tr);
         if ($tr.data('type') === 'dir') load(join(path, name));
         else if (editable.test(name)) openEditor(join(path, name));
         else window.location = R.download + '?path=' + encodeURIComponent(join(path, name));
     }).on('click', '[data-row]', function (e) {
         e.preventDefault();
-        var $tr = $(this).closest('tr'), name = $tr.data('name') + '', full = join(path, name), action = $(this).data('row');
+        var $tr = $(this).closest('tr'), name = rowName($tr), full = join(path, name), action = $(this).data('row');
         if (action === 'open') load(full);
         if (action === 'edit') openEditor(full);
         if (action === 'download') window.location = R.download + '?path=' + encodeURIComponent(full);

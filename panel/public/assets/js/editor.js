@@ -62,7 +62,8 @@
     function timeNow() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
     var ICONS = {
-        php: 'bi-filetype-php ic-php', phtml: 'bi-filetype-php ic-php', js: 'bi-filetype-js ic-js', mjs: 'bi-filetype-js ic-js', cjs: 'bi-filetype-js ic-js',
+        php: 'bi-filetype-php ic-php', phtml: 'bi-filetype-php ic-php', tpl: 'bi-filetype-html ic-html', latte: 'bi-filetype-html ic-html',
+        js: 'bi-filetype-js ic-js', mjs: 'bi-filetype-js ic-js', cjs: 'bi-filetype-js ic-js',
         jsx: 'bi-filetype-jsx ic-js', ts: 'bi-filetype-tsx ic-ts', tsx: 'bi-filetype-tsx ic-ts', css: 'bi-filetype-css ic-css', scss: 'bi-filetype-scss ic-css',
         sass: 'bi-filetype-sass ic-css', less: 'bi-filetype-css ic-css', html: 'bi-filetype-html ic-html', htm: 'bi-filetype-html ic-html', vue: 'bi-filetype-html ic-sh',
         json: 'bi-filetype-json ic-json', md: 'bi-filetype-md ic-md', mdx: 'bi-filetype-mdx ic-md', txt: 'bi-filetype-txt ic-file', log: 'bi-file-earmark-text ic-file',
@@ -85,13 +86,14 @@
     }
 
     var LANG_EXT = {
-        php: 'php', phtml: 'php', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+        php: 'php', phtml: 'php', phps: 'php', tpl: 'html', latte: 'html', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
         json: 'json', jsonc: 'json', map: 'json', webmanifest: 'json', css: 'css', scss: 'scss', sass: 'scss', less: 'less', html: 'html', htm: 'html',
         vue: 'html', svelte: 'html', xml: 'xml', svg: 'xml', xsl: 'xml', plist: 'xml', md: 'markdown', markdown: 'markdown', mdx: 'mdx', sql: 'mysql',
         sh: 'shell', bash: 'shell', zsh: 'shell', py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java', kt: 'kotlin', c: 'cpp', h: 'cpp',
         cpp: 'cpp', hpp: 'cpp', cs: 'csharp', lua: 'lua', pl: 'perl', ps1: 'powershell', bat: 'bat', cmd: 'bat', yml: 'yaml', yaml: 'yaml',
-        ini: 'ini', cnf: 'ini', env: 'ini', properties: 'ini', toml: 'ini', service: 'ini', conf: 'apache', htaccess: 'apache', twig: 'twig',
-        graphql: 'graphql', gql: 'graphql', dockerfile: 'dockerfile', log: 'log', txt: 'plaintext', csv: 'plaintext', swift: 'swift', dart: 'dart', r: 'r'
+        ini: 'ini', cnf: 'ini', cfg: 'ini', env: 'ini', properties: 'ini', toml: 'ini', service: 'ini', socket: 'ini', timer: 'ini', conf: 'apache', htaccess: 'apache', twig: 'twig',
+        graphql: 'graphql', gql: 'graphql', dockerfile: 'dockerfile', log: 'log', txt: 'plaintext', csv: 'plaintext', tsv: 'plaintext',
+        fish: 'shell', hcl: 'ini', tf: 'ini', gradle: 'java', swift: 'swift', dart: 'dart', r: 'r'
     };
     function languageFor(path) {
         var base = basename(path).toLowerCase();

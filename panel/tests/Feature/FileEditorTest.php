@@ -118,4 +118,42 @@ class FileEditorTest extends TestCase
         $this->getJson('/files/open?path='.urlencode(self::FILE))->assertOk();
         $this->postJson('/files/write', ['path' => self::FILE, 'content' => 'x'])->assertForbidden();
     }
+
+    public function test_template_and_extensionless_files_are_editable(): void
+    {
+        $editable = fn (string $name) => (bool) preg_match('#'.FileManager::EDITABLE_PATTERN.'#i', $name);
+
+        // reported by users: template files were not offered in the editor
+        foreach (['header.tpl', 'page.phtml', 'layout.twig', 'mail.latte', 'app.blade.php', 'nginx.cfg', 'data.tsv'] as $name) {
+            $this->assertTrue($editable($name), $name.' should open in the editor');
+        }
+        // files without an extension and dot files keep working
+        foreach (['Makefile', 'Dockerfile.prod', '.env', '.env.local', '.htaccess', 'composer.lock'] as $name) {
+            $this->assertTrue($editable($name), $name.' should open in the editor');
+        }
+        foreach (['photo.jpg', 'archive.zip', 'video.mp4', 'font.woff2', 'backup.sql.gz'] as $name) {
+            $this->assertFalse($editable($name), $name.' is not a text file');
+        }
+    }
+
+    public function test_both_file_managers_use_the_same_list_and_read_numeric_names_as_text(): void
+    {
+        $this->user();
+
+        // the two file managers must never drift apart on what can be edited
+        $admin = $this->get('/files')->assertOk()->getContent();
+        $this->assertStringContainsString('new RegExp(', $admin);
+        $this->assertStringNotContainsString("var editable = /", $admin, 'the pattern comes from the panel, not from the page');
+
+        // a folder whose name is only digits ("2024") must be opened like any other:
+        // reading it from the row as a number used to make the lookup fail
+        $this->assertStringContainsString('rowName(', $admin);
+        $this->assertStringNotContainsString(".data('name')", $admin);
+
+        $listing = $this->getJson('/files/list?path=/www/wwwroot/example.com')->assertOk()->json('items');
+        $names = array_column($listing, 'name');
+        $this->assertContains('2024', $names);
+        $this->assertSame('2024', $names[array_search('2024', $names, true)], 'names stay strings');
+        $this->getJson('/files/list?path=/www/wwwroot/example.com/2024')->assertOk();
+    }
 }

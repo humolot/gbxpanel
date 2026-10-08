@@ -117,6 +117,15 @@ class FileManager
     }
 
     /** Encodings the code editor can open and save (label => mbstring name). */
+    /**
+     * File names the panel opens in the code editor.
+     *
+     * Template files (.tpl, .phtml, .twig, .latte), configuration files and files without an
+     * extension (Makefile, Dockerfile, .env, .htaccess) are all text and belong here. Used by
+     * both file managers, so the list never differs between the administrator and the client.
+     */
+    public const EDITABLE_PATTERN = '\.(php|phtml|phps|php\d|tpl|twig|latte|blade\.php|html?|xhtml|css|scss|sass|less|styl|js|mjs|cjs|jsx|ts|tsx|vue|svelte|json|jsonc|json5|map|webmanifest|xml|xsl|xslt|svg|rss|atom|ya?ml|toml|ini|cnf|conf|cfg|properties|env|htaccess|htpasswd|service|socket|timer|txt|text|md|markdown|mdx|rst|adoc|csv|tsv|log|sql|sh|bash|zsh|fish|py|rb|pl|pm|lua|go|rs|java|kt|c|h|cpp|hpp|cs|swift|dart|r|gradle|lock|patch|diff|sum|list|tf|hcl)$|^\.[^.\/]+$|^[^.\/]+$|^(dockerfile|containerfile|makefile|procfile|vagrantfile|jenkinsfile|readme|license|changelog)(\..*)?$|^\.env\..+$';
+
     public const ENCODINGS = [
         'utf-8' => 'UTF-8',
         'utf-8-bom' => 'UTF-8',
@@ -547,7 +556,7 @@ class FileManager
         $base = rtrim($path, '/');
         $items = $path === '/'
             ? [['bin', 'dir'], ['etc', 'dir'], ['home', 'dir'], ['root', 'dir'], ['usr', 'dir'], ['var', 'dir'], ['www', 'dir']]
-            : [['assets', 'dir'], ['storage', 'dir'], ['vendor', 'dir'], ['.htaccess', 'file'], ['index.php', 'file'], ['composer.json', 'file'], ['backup.tar.gz', 'file'], ['README.md', 'file']];
+            : [['assets', 'dir'], ['storage', 'dir'], ['vendor', 'dir'], ['2024', 'dir'], ['.htaccess', 'file'], ['index.php', 'file'], ['header.tpl', 'file'], ['composer.json', 'file'], ['backup.tar.gz', 'file'], ['README.md', 'file']];
 
         return array_map(fn ($i) => [
             'name' => $i[0], 'type' => $i[1], 'perms' => $i[1] === 'dir' ? '755' : '644', 'owner' => 'www-data', 'group' => 'www-data',

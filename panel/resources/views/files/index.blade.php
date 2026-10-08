@@ -121,7 +121,7 @@ $(function () {
     var maxUpload = {{ (int) $maxUpload }};
 
     var icons = { php: 'bi-filetype-php', js: 'bi-filetype-js', css: 'bi-filetype-css', html: 'bi-filetype-html', htm: 'bi-filetype-html', json: 'bi-filetype-json', md: 'bi-filetype-md', sql: 'bi-filetype-sql', sh: 'bi-filetype-sh', py: 'bi-filetype-py', yml: 'bi-filetype-yml', yaml: 'bi-filetype-yml', xml: 'bi-filetype-xml', txt: 'bi-filetype-txt', log: 'bi-file-earmark-text', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', png: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', svg: 'bi-filetype-svg', webp: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip', gz: 'bi-file-earmark-zip', tgz: 'bi-file-earmark-zip', tar: 'bi-file-earmark-zip', rar: 'bi-file-earmark-zip', pdf: 'bi-filetype-pdf', conf: 'bi-file-earmark-code', ini: 'bi-file-earmark-code', env: 'bi-file-earmark-lock' };
-    var editable = /\.(php|js|mjs|ts|css|scss|html?|json|md|txt|log|sql|sh|bash|py|ya?ml|xml|conf|ini|env|htaccess|vue|jsx|tsx|twig|blade\.php|lock|csv|svg|service|cnf|properties|toml|gitignore|editorconfig|dockerfile)$|^[^.]+$|^\.[^.]+$/i;
+    var editable = new RegExp(@json(\App\Services\FileManager::EDITABLE_PATTERN), 'i');
     var archive = /\.(zip|tar|tar\.gz|tgz|tar\.bz2|tar\.xz|gz)$/i;
 
     function ext(name) { var m = name.toLowerCase().match(/\.([a-z0-9]+)$/); return m ? m[1] : ''; }
@@ -181,7 +181,7 @@ $(function () {
     }
 
     function selected() {
-        return $('#fmBody tr.selected').map(function () { return $(this).data('name'); }).get();
+        return $('#fmBody tr.selected').map(function () { return rowName($(this)); }).get();
     }
 
     function selection() {
@@ -201,7 +201,9 @@ $(function () {
         selection();
     });
 
-    function item(name) { return items.find(function (i) { return i.name === name; }); }
+    // attr() instead of data(): jQuery would turn a name like "123" into a number
+    function rowName($tr) { return String($tr.attr('data-name')); }
+    function item(name) { name = String(name); return items.find(function (i) { return i.name === name; }); }
 
     function open(name) {
         var i = item(name);
@@ -211,8 +213,8 @@ $(function () {
         window.location = R.download + '?path=' + encodeURIComponent(join(cwd, name));
     }
 
-    $('#fmBody').on('click', '.fm-open', function (e) { e.preventDefault(); open($(this).closest('tr').data('name')); });
-    $('#fmBody').on('dblclick', 'tr', function () { open($(this).data('name')); });
+    $('#fmBody').on('click', '.fm-open', function (e) { e.preventDefault(); open(rowName($(this).closest('tr'))); });
+    $('#fmBody').on('dblclick', 'tr', function () { open(rowName($(this))); });
     $('#fmCrumbs').on('click', 'a', function (e) { e.preventDefault(); load($(this).data('path')); });
     $('#fmUp').on('click', function () { load(cwd.replace(/\/[^\/]+\/?$/, '') || '/'); });
     $('#fmRefresh').on('click', function () { load(cwd); });
@@ -293,7 +295,7 @@ $(function () {
 
     $('#fmBody').on('click', '[data-row]', function (e) {
         e.preventDefault();
-        var act = $(this).data('row'), name = $(this).closest('tr').data('name'), path = join(cwd, name), $tr = $(this).closest('tr');
+        var $tr = $(this).closest('tr'), act = $(this).data('row'), name = rowName($tr), path = join(cwd, name);
         switch (act) {
             case 'open': load(path); break;
             case 'edit': edit(path); break;
