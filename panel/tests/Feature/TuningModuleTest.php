@@ -120,14 +120,20 @@ class TuningModuleTest extends TestCase
         $this->postJson('/tuning/apache/restart')->assertStatus(422);
     }
 
-    public function test_the_panel_never_blocks_the_functions_it_needs_itself(): void
+    public function test_blocked_functions_land_in_the_website_pool_and_never_in_php_ini(): void
     {
+        // reported by a user: the list used to go to php.ini, which the panel reads as well, so
+        // blocking proc_open took the whole panel down with a 500 ("Process relies on proc_open")
         $php = new PhpTuner('8.3');
-        $result = $php->saveDisabledFunctions(['exec', 'putenv', 'system', 'escapeshellarg']);
+        $script = $php->saveDisabledFunctions(['exec', 'system', 'proc_open'])->output;
 
-        $this->assertStringContainsString('disable_functions = exec,system', $result->output);
-        $this->assertStringNotContainsString('putenv', $result->output, 'the panel runs on this PHP version and needs these');
-        $this->assertStringNotContainsString('escapeshellarg', $result->output);
+        $this->assertStringContainsString('/etc/php/8.3/fpm/pool.d/www.conf', $script);
+        $this->assertStringContainsString('php_admin_value[disable_functions] = exec,system,proc_open', $script);
+        $this->assertStringContainsString("'/etc/php/8.3/fpm/php.ini'", $script, 'php.ini is touched too');
+        $this->assertStringContainsString('disable_functions = #', $script, 'but only to clear it, so an older installation repairs itself');
+        $this->assertStringNotContainsString('disable_functions = exec,system,proc_open#', $script, 'the list never reaches php.ini, which the panel reads as well');
+
+        $this->assertTrue($php->saveDisabledFunctions(['not a function'])->failed());
     }
 
     public function test_only_administrators_change_performance_settings(): void

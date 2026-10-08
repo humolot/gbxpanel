@@ -207,7 +207,9 @@ abstract class Tuner
         $content = Shell::readFile($file) ?? '';
         $values = [];
         foreach ($keys as $key) {
-            preg_match(sprintf($pattern, preg_quote($key, '/')), $content, $m);
+            // keys may already carry an escaped form (php_admin_value[...]) used by pool files
+            $quoted = str_contains($key, '\\') ? $key : preg_quote($key, '/');
+            preg_match(sprintf($pattern, $quoted), $content, $m);
             $values[$key] = trim($m[1] ?? '');
         }
 

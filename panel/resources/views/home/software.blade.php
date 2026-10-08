@@ -86,6 +86,7 @@
                         </div>
                         <div class="tab-pane fade" id="tuneTabFunctions">
                             <p class="cell-sub">Functions PHP refuses to run. Blocking the ones that start programs limits what an invaded website can do on the server.</p>
+                            <div class="db-notice cron-notice mb-3"><i class="bi bi-info-circle-fill"></i><span>The list is written to the pool that serves the websites of this PHP version. The panel runs on its own pool and keeps the functions it needs, so blocking <span class="font-mono">exec</span> or <span class="font-mono">proc_open</span> here cannot take the panel down. The command line is not affected either.</span></div>
                             <div class="d-flex gap-2 mb-3">
                                 <input type="text" class="form-control font-mono" id="tuneFunctionName" placeholder="Function name, for example exec">
                                 <button class="btn btn-secondary text-nowrap" id="tuneFunctionAdd"><i class="bi bi-plus-lg"></i> Add</button>

@@ -209,12 +209,22 @@ class PhpTuner extends Tuner
     /* ==================================================== disabled functions */
 
     /** Functions PHP refuses to run, a common hardening step on shared servers. */
+    /**
+     * Blocked functions are written to the pool that serves the websites, never to php.ini.
+     *
+     * The panel runs on its own PHP-FPM pool (gbxpanel-fpm) with the same php.ini, so a list in
+     * php.ini used to take the panel down with it: without proc_open it cannot run a single
+     * command. Keeping the list in the website pool blocks the functions where it matters and
+     * leaves the panel, the queue worker and the command line untouched.
+     */
     public function disabledFunctions(): array
     {
         if (Shell::simulating()) {
             return ['exec', 'system', 'passthru', 'shell_exec', 'proc_open', 'popen'];
         }
-        $value = $this->readIni($this->iniFile(), ['disable_functions'])['disable_functions'] ?? '';
+        $pool = $this->readIni($this->file(), ['php_admin_value\[disable_functions\]'])['php_admin_value\[disable_functions\]'] ?? '';
+        // installations that still carry the old list in php.ini keep showing it until it is saved again
+        $value = $pool !== '' ? $pool : ($this->readIni($this->iniFile(), ['disable_functions'])['disable_functions'] ?? '');
 
         return array_values(array_filter(array_map('trim', explode(',', $value))));
     }
@@ -233,14 +243,15 @@ class PhpTuner extends Tuner
                 $clean[strtolower($function)] = strtolower($function);
             }
         }
-        // the panel itself runs on this PHP version through its own pool; blocking these would break it
-        foreach (['putenv', 'escapeshellarg', 'escapeshellcmd'] as $needed) {
-            unset($clean[$needed]);
-        }
+        $list = implode(',', $clean);
+        // the list belongs to the websites pool; php.ini is cleared so an older installation
+        // (where the list did take the panel down) repairs itself the first time this is saved
+        $write = $this->iniWriter($this->file(), ['php_admin_value[disable_functions]' => $list])
+            .' && '.$this->iniWriter($this->iniFile(), ['disable_functions' => '']);
 
         return $this->guarded(
-            $this->iniFile(),
-            $this->iniWriter($this->iniFile(), ['disable_functions' => implode(',', $clean)]),
+            $this->file(),
+            $write,
             "php-fpm{$this->version} -t",
             "systemctl reload php{$this->version}-fpm || systemctl restart php{$this->version}-fpm"
         );
