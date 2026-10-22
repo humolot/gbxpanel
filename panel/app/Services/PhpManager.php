@@ -152,28 +152,74 @@ class PhpManager
      * to the server. When the version the panel runs on is updated, its own services are
      * restarted afterwards, detached, so the task can finish writing its log first.
      */
+    /** Per version part of the update script; {V} is the version. */
+    protected const UPDATE_TEMPLATE = <<<'BASH'
+echo '==> PHP {V}'
+BEFORE="$(/usr/bin/php{V} -r 'echo PHP_VERSION;' 2>/dev/null)"
+PKGS="$(dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' 'php{V}' 'php{V}-*' 'libapache2-mod-php{V}' 'libphp{V}-embed' 2>/dev/null | awk -F'\t' '$2 == "installed" { print $1 }')"
+UPGRADE=""
+for p in $PKGS; do
+    cand="$(LC_ALL=C apt-cache policy "$p" 2>/dev/null | awk '/Candidate:/ { print $2 }')"
+    case "$cand" in
+        ''|'(none)') echo "    skipping $p: the repository no longer carries this package" ;;
+        *) UPGRADE="$UPGRADE $p" ;;
+    esac
+done
+if [ -n "$UPGRADE" ]; then
+    apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold $UPGRADE || FAILED=1
+    systemctl restart php{V}-fpm >/dev/null 2>&1 || true
+else
+    echo '    nothing to upgrade for this version'
+fi
+AFTER="$(/usr/bin/php{V} -r 'echo PHP_VERSION;' 2>/dev/null)"
+if [ "$BEFORE" != "$AFTER" ]; then
+    echo "    PHP {V}: $BEFORE -> $AFTER"
+    CHANGED="$CHANGED {V}"
+else
+    echo "    PHP {V}: already at $AFTER"
+fi
+BASH;
+
+    /**
+     * Install the newest packages of the given PHP versions.
+     *
+     * Only the packages already installed for that version are upgraded, and only those the
+     * repository still carries: a transitional package that became virtual (php8.4-json, for
+     * example) makes apt refuse the whole command, which used to leave every version untouched.
+     *
+     * When the version that runs the panel really changed, its services are reloaded afterwards,
+     * detached and gracefully, so the request being served at that moment does not fail.
+     */
     public function updateScript(array $versions): string
     {
-        $script = Apt::preamble()."apt-get update -y\n";
+        $script = Apt::preamble()."FAILED=0\nCHANGED=''\napt-get update -y\n\n";
+
         foreach ($versions as $version) {
             if (! self::validVersion($version)) {
                 throw new \InvalidArgumentException('Unknown PHP version: '.$version);
             }
-            $script .= "echo '==> PHP {$version}'\n"
-                ."apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \$(dpkg-query -W -f='\${binary:Package}\\n' 'php{$version}-*' 2>/dev/null | tr '\\n' ' ') || true\n"
-                ."systemctl restart php{$version}-fpm || true\n"
-                ."/usr/bin/php{$version} -v | head -1\n";
+            $script .= str_replace('{V}', $version, self::UPDATE_TEMPLATE)."
+
+";
         }
         $script .= "apt-get autoremove -y\n";
 
-        if (in_array(self::panelVersion(), $versions, true)) {
-            $script .= "echo '==> The panel runs on PHP ".self::panelVersion().": its services restart in a moment'\n"
-                ."setsid nohup bash -c 'sleep 3; systemctl restart gbxpanel-fpm; supervisorctl restart gbxpanel-worker:* >/dev/null 2>&1' >/dev/null 2>&1 </dev/null &\n";
+        $panel = self::panelVersion();
+        if (in_array($panel, $versions, true)) {
+            $script .= <<<BASH
+
+                case "\$CHANGED" in
+                    *" {$panel}"*)
+                        echo '==> The panel runs on PHP {$panel}: its services reload in a few seconds'
+                        setsid nohup bash -c 'sleep 5; systemctl reload gbxpanel-fpm || systemctl restart gbxpanel-fpm; supervisorctl restart gbxpanel-worker:* >/dev/null 2>&1' >/dev/null 2>&1 </dev/null &
+                        ;;
+                esac
+
+                BASH;
         }
 
-        return $script;
+        return $script."\nexit \$FAILED\n";
     }
-
     public function installExtensionScript(string $version, string $extension): string
     {
         if (! preg_match('/^[a-z0-9_-]{2,30}$/', $extension)) {

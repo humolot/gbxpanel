@@ -43,15 +43,23 @@ class PhpUpdateTest extends TestCase
 
         $this->assertStringContainsString('flock -w 900 9', $script, 'package tasks wait for the apt lock');
         $this->assertStringContainsString('--only-upgrade', $script, 'nothing new is installed');
-        $this->assertStringContainsString("dpkg-query -W -f='\${binary:Package}\\n' 'php8.3-*'", $script, 'only the packages of that version');
+        $this->assertStringContainsString("'php8.3' 'php8.3-*' 'libapache2-mod-php8.3'", $script, 'only the packages of that version');
+        $this->assertStringContainsString('$2 == "installed"', $script, 'packages that are only half removed are left out');
         $this->assertStringContainsString('systemctl restart php8.3-fpm', $script);
         $this->assertStringNotContainsString('gbxpanel-fpm', $script, 'this version does not run the panel');
+        $this->assertStringContainsString('exit $FAILED', $script, 'a version that fails fails the task');
 
-        // the version the panel runs on restarts its own services, detached, after the task
+        // reported by a user: a transitional package that became virtual (php8.4-json) has no
+        // installation candidate, and apt then refused the whole command and upgraded nothing
+        $this->assertStringContainsString('apt-cache policy', $script);
+        $this->assertStringContainsString("''|'(none)')", $script, 'packages the repository dropped are skipped');
+
+        // the version the panel runs on reloads its own services, detached, and only when it changed
         $panel = app(PhpManager::class)->updateScript([PhpManager::panelVersion()]);
         $this->assertStringContainsString('setsid nohup bash -c', $panel);
-        $this->assertStringContainsString('systemctl restart gbxpanel-fpm', $panel);
+        $this->assertStringContainsString('systemctl reload gbxpanel-fpm || systemctl restart gbxpanel-fpm', $panel, 'a graceful reload keeps the request being served alive');
         $this->assertStringContainsString('supervisorctl restart gbxpanel-worker', $panel);
+        $this->assertStringContainsString('case "$CHANGED" in', $panel, 'nothing is reloaded when the version did not change');
 
         $this->assertThrows(fn () => app(PhpManager::class)->updateScript(['9.9']), \InvalidArgumentException::class);
     }

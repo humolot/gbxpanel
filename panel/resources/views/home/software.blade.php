@@ -193,8 +193,12 @@ $(function () {
         $('#softwareGroups').html(html || '<div class="empty-state"><div class="icon"><i class="bi bi-box-seam"></i></div><h3>Nothing to show</h3></div>');
     }
 
-    function load(fresh) {
-        GBX.get(@json(route('home.software.data')), { fresh: fresh ? 1 : 0 }).done(function (r) { items = r.data; render(); });
+    // the panel reloads its own PHP services after updating the version it runs on, so a
+    // detection started at that exact moment can fail once: it is tried again before giving up
+    function load(fresh, retried) {
+        GBX.get(@json(route('home.software.data')), { fresh: fresh ? 1 : 0 }, { silent: !retried })
+            .done(function (r) { items = r.data; render(); })
+            .fail(function () { if (!retried) setTimeout(function () { load(fresh, true); }, 5000); });
     }
     load(false);
 
@@ -291,7 +295,9 @@ $(function () {
         }).then(function (r) {
             if (!r.isConfirmed) return;
             bootstrap.Modal.getOrCreateInstance('#phpUpdatesModal').hide();
-            GBX.post(@json(route('home.software.php.update')), { versions: versions }, { onTaskDone: function () { load(true); loadPhpUpdates(false); } });
+            GBX.post(@json(route('home.software.php.update')), { versions: versions }, { onTaskDone: function () {
+                setTimeout(function () { load(true); loadPhpUpdates(false); }, 7000);
+            } });
         });
     };
 
