@@ -44,9 +44,23 @@ class SystemController extends ApiController
         ]);
     }
 
-    public function php(SoftwareManager $software)
+    public function php(Request $request, SoftwareManager $software, \App\Services\PhpManager $php)
     {
-        return $this->data(['versions' => $software->phpVersions(), 'default' => config('gbx.default_php')]);
+        $versions = $software->phpVersions();
+
+        return $this->data([
+            'versions' => $versions,
+            'default' => config('gbx.default_php'),
+            'panel_version' => \App\Services\PhpManager::panelVersion(),
+            'releases' => $php->updates($versions, $request->boolean('refresh')),
+        ]);
+    }
+
+    public function phpUpdate(Request $request)
+    {
+        return $this->forward(\App\Http\Controllers\SoftwareController::class, 'phpUpdate', [
+            'versions' => $request->input('versions', 'all'),
+        ]);
     }
 
     public function metrics(Request $request)

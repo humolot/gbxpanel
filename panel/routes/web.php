@@ -131,6 +131,8 @@ Route::middleware(['auth', 'panel.access'])->group(function () {
         Route::get('/software/data', [Controllers\SoftwareController::class, 'data'])->name('software.data');
         Route::post('/software/install', [Controllers\SoftwareController::class, 'install'])->name('software.install');
         Route::post('/software/uninstall', [Controllers\SoftwareController::class, 'uninstall'])->name('software.uninstall');
+        Route::get('/software/php-updates', [Controllers\SoftwareController::class, 'phpUpdates'])->name('software.php.updates');
+        Route::post('/software/php-update', [Controllers\SoftwareController::class, 'phpUpdate'])->name('software.php.update');
         Route::get('/software/php/{version}', [Controllers\SoftwareController::class, 'php'])->name('software.php');
         Route::post('/software/php/{version}', [Controllers\SoftwareController::class, 'phpSave'])->name('software.php.save');
         Route::post('/software/php/{version}/extension', [Controllers\SoftwareController::class, 'phpExtension'])->name('software.php.extension');

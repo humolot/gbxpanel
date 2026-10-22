@@ -14,6 +14,7 @@
                 <li class="nav-item"><button class="nav-link" data-filter="installed">Installed</button></li>
                 <li class="nav-item"><button class="nav-link" data-filter="available">Available</button></li>
             </ul>
+            <button class="btn btn-outline-secondary" id="phpUpdatesBtn"><i class="bi bi-filetype-php"></i> PHP updates <span class="badge badge-warning ms-1 d-none" id="phpUpdatesBadge"></span></button>
             <button class="btn btn-outline-secondary" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> Re-detect</button>
         </div>
     </div>
@@ -51,6 +52,33 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary" id="phpSave"><i class="bi bi-check2"></i> Save configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="phpUpdatesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-filetype-php"></i> PHP updates</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-primary btn-sm" id="phpUpdateAll"><i class="bi bi-download"></i> Update every version</button>
+                        <button class="btn btn-outline-secondary btn-sm ms-auto" id="phpUpdateCheck"><i class="bi bi-arrow-clockwise"></i> Check for new releases</button>
+                    </div>
+                    <table class="table table-sm db-table mb-0">
+                        <thead><tr><th>Version</th><th>Installed</th><th>Available</th><th class="text-end">Operate</th></tr></thead>
+                        <tbody id="phpUpdatesList"></tbody>
+                    </table>
+                    <ul class="sm-hints">
+                        <li>Patch releases (8.4.12 to 8.4.15) bring the security fixes of that month and keep the same behaviour, so websites do not need changes.</li>
+                        <li>Only the packages already installed for each version are upgraded; nothing new is added to the server.</li>
+                        <li>PHP-FPM restarts right after, so pages being served at that moment can fail once.</li>
+                        <li id="phpUpdatePanelHint" class="d-none"></li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -146,7 +174,9 @@ $(function () {
         }
         return '<div class="col-sm-6 col-lg-4 col-xxl-3 sw-item" data-installed="' + (s.installed ? 1 : 0) + '"><div class="soft-card" data-id="' + GBX.escape(s.id) + '">' +
             '<div class="d-flex align-items-center gap-2"><div class="soft-icon"><i class="bi ' + s.icon + '"></i></div><div class="min-w-0 flex-grow-1"><h4 class="text-truncate">' + GBX.escape(s.name) + '</h4>' +
-            '<div class="cell-sub font-mono text-truncate">' + GBX.escape(s.installed_version || '—') + '</div></div>' + status + '</div>' +
+            '<div class="cell-sub font-mono text-truncate">' + GBX.escape(s.installed_version || '—') +
+            (s.key === 'php' && phpUpdates[s.version] && phpUpdates[s.version].update ? ' <span class="badge badge-warning">' + GBX.escape(phpUpdates[s.version].candidate) + ' available</span>' : '') +
+            '</div></div>' + status + '</div>' +
             '<p>' + GBX.escape(s.description) + '</p>' + actions + '</div></div>';
     }
 
@@ -224,6 +254,59 @@ $(function () {
         GBX.busy($b, true);
         GBX.post(@json(url('home/software/php')) + '/' + phpVersion, { settings: settings }).done(function (r) { toastr.success(r.message); }).always(function () { GBX.busy($b, false); });
     });
+
+    /* ======================================================== PHP updates */
+    var phpUpdates = {};
+
+    function renderPhpUpdates(data, panelVersion) {
+        phpUpdates = data || {};
+        var versions = Object.keys(phpUpdates);
+        var pending = versions.filter(function (v) { return phpUpdates[v].update; });
+        $('#phpUpdatesBadge').text(pending.length).toggleClass('d-none', !pending.length);
+        $('#phpUpdateAll').prop('disabled', !pending.length);
+        $('#phpUpdatePanelHint').toggleClass('d-none', !panelVersion || !phpUpdates[panelVersion] || !phpUpdates[panelVersion].update)
+            .text('PHP ' + panelVersion + ' runs the panel itself: its services restart a few seconds after the update, so the page may need one reload.');
+        if (items.length) render();
+        $('#phpUpdatesList').html(versions.length ? versions.map(function (v) {
+            var row = phpUpdates[v];
+            return '<tr><td class="cell-strong">PHP ' + GBX.escape(v) + (v === panelVersion ? ' <span class="badge badge-soft">panel</span>' : '') + '</td>' +
+                '<td class="font-mono small">' + GBX.escape(row.installed || '-') + '</td>' +
+                '<td class="font-mono small">' + (row.update ? '<span class="text-warning">' + GBX.escape(row.candidate || '') + '</span>' : GBX.escape(row.candidate || '-')) + '</td>' +
+                '<td class="text-end">' + (row.update
+                    ? '<button class="btn btn-sm btn-primary" data-php-update="' + GBX.escape(v) + '"><i class="bi bi-download"></i> Update</button>'
+                    : '<span class="cell-sub">up to date</span>') + '</td></tr>';
+        }).join('') : '<tr><td colspan="4" class="sm-empty">No PHP version installed yet.</td></tr>');
+    }
+
+    function loadPhpUpdates(refresh) {
+        if (refresh) $('#phpUpdatesList').html('<tr><td colspan="4" class="sm-empty"><i class="bi bi-arrow-repeat spin"></i> Asking the repository</td></tr>');
+        return GBX.get(@json(route('home.software.php.updates')), { refresh: refresh ? 1 : 0 }, { silent: true })
+            .done(function (r) { renderPhpUpdates(r.data, r.panel_version); });
+    }
+
+    var runPhpUpdate = function (versions, label) {
+        GBX.confirm({
+            title: label, text: 'The newest packages are installed and PHP-FPM restarts. Pages being served at that moment can fail once.',
+            confirmText: 'Update'
+        }).then(function (r) {
+            if (!r.isConfirmed) return;
+            bootstrap.Modal.getOrCreateInstance('#phpUpdatesModal').hide();
+            GBX.post(@json(route('home.software.php.update')), { versions: versions }, { onTaskDone: function () { load(true); loadPhpUpdates(false); } });
+        });
+    };
+
+    $('#phpUpdatesBtn').on('click', function () {
+        bootstrap.Modal.getOrCreateInstance('#phpUpdatesModal').show();
+        loadPhpUpdates(false);
+    });
+    $('#phpUpdateCheck').on('click', function () { loadPhpUpdates(true); });
+    $('#phpUpdateAll').on('click', function () { runPhpUpdate('all', 'Update every PHP version'); });
+    $('#phpUpdatesList').on('click', '[data-php-update]', function () {
+        var v = $(this).data('php-update') + '';
+        runPhpUpdate([v], 'Update PHP ' + v);
+    });
+
+    loadPhpUpdates(false);
 
     /* ======================================================== optimization */
     var tuning = null;

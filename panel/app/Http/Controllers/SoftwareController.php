@@ -50,6 +50,44 @@ class SoftwareController extends Controller
         return $this->task($this->software->uninstall($data['key'], $data['version'] ?? null), 'Removal started');
     }
 
+    /** Installed and available release of every PHP version on this server. */
+    public function phpUpdates(Request $request, PhpManager $php)
+    {
+        $versions = $this->software->phpVersions();
+
+        return $this->ok('ok', [
+            'data' => $php->updates($versions, $request->boolean('refresh')),
+            'panel_version' => PhpManager::panelVersion(),
+        ]);
+    }
+
+    /** Install the newest packages of one PHP version, or of every installed version. */
+    public function phpUpdate(Request $request, PhpManager $php)
+    {
+        $installed = $this->software->phpVersions();
+        $input = (array) $request->input('versions', []);
+        $versions = $request->input('versions') === 'all' || $input === ['all']
+            ? $installed
+            : array_values(array_intersect($installed, array_map('strval', $input)));
+
+        if (! $versions) {
+            return $this->fail('Choose a PHP version that is installed on this server.');
+        }
+        try {
+            $script = $php->updateScript($versions);
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail($e->getMessage());
+        }
+        $this->audit('software', 'Updating PHP '.implode(', ', $versions));
+
+        return $this->task(TaskRunner::dispatch(
+            count($versions) === 1 ? 'Update PHP '.$versions[0] : 'Update PHP '.implode(', ', $versions),
+            $script,
+            'software',
+            ['php_versions' => $versions],
+        ), 'Update started');
+    }
+
     public function php(string $version, PhpManager $php)
     {
         abort_unless(PhpManager::validVersion($version), 404);

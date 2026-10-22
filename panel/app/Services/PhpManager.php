@@ -72,6 +72,108 @@ class PhpManager
         return array_values(array_filter(array_map('trim', explode("\n", $out)), fn ($l) => $l !== '' && ! str_starts_with($l, '[')));
     }
 
+    /* ========================================================= patch updates */
+
+    /** PHP version the panel itself runs on; it needs a restart after its packages change. */
+    public static function panelVersion(): string
+    {
+        preg_match('/(\d+\.\d+)/', (string) config('gbx.php_cli', '/usr/bin/php8.4'), $m);
+
+        return $m[1] ?? PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;
+    }
+
+    /**
+     * Installed and available release of every PHP version on this server.
+     *
+     * PHP publishes patch releases (8.4.12 to 8.4.15 and so on) every month; they carry the
+     * security fixes and never change how the sites behave. Reading what apt already knows is
+     * instant; $refresh asks the repository for a new list first.
+     *
+     * @return array<string, array{installed: ?string, candidate: ?string, update: bool}>
+     */
+    public function updates(array $versions, bool $refresh = false): array
+    {
+        if (! $versions) {
+            return [];
+        }
+        if (Shell::simulating()) {
+            return collect($versions)->mapWithKeys(fn ($v) => [$v => [
+                'installed' => $v.'.12',
+                'candidate' => $v === '8.4' ? $v.'.15' : $v.'.12',
+                'update' => $v === '8.4',
+            ]])->all();
+        }
+
+        if ($refresh) {
+            Shell::run(Apt::preamble(120).'apt-get update -y >/dev/null 2>&1 || true', 300);
+        }
+
+        $packages = implode(' ', array_map(fn ($v) => Shell::arg("php{$v}-fpm"), $versions));
+        $out = Shell::out('LC_ALL=C apt-cache policy '.$packages.' 2>/dev/null', 60);
+
+        $result = [];
+        foreach ($versions as $version) {
+            $result[$version] = ['installed' => null, 'candidate' => null, 'update' => false];
+        }
+        $current = null;
+        foreach (explode("\n", $out) as $line) {
+            if (preg_match('/^php(\d+\.\d+)-fpm:/', trim($line), $m)) {
+                $current = $m[1];
+
+                continue;
+            }
+            if (! $current || ! isset($result[$current])) {
+                continue;
+            }
+            if (preg_match('/^\s*(Installed|Candidate):\s*(\S+)/', $line, $m)) {
+                $value = $m[2] === '(none)' ? null : self::shortVersion($m[2]);
+                $result[$current][strtolower($m[1])] = $value;
+            }
+        }
+        foreach ($result as $version => $row) {
+            $result[$version]['update'] = $row['installed'] !== null && $row['candidate'] !== null && version_compare($row['candidate'], $row['installed'], '>');
+        }
+
+        return $result;
+    }
+
+    /** "8.4.15-1+ubuntu24.04.1+deb.sury.org+1" is shown as "8.4.15". */
+    public static function shortVersion(string $package): string
+    {
+        preg_match('/^\d+:?(\d+(\.\d+)*)/', ltrim($package, '0123456789:'), $m);
+
+        return $m[1] ?? (preg_match('/(\d+(\.\d+)+)/', $package, $n) ? $n[1] : $package);
+    }
+
+    /**
+     * Install the newest packages of the given PHP versions.
+     *
+     * Only the packages already installed for that version are upgraded, so nothing new is added
+     * to the server. When the version the panel runs on is updated, its own services are
+     * restarted afterwards, detached, so the task can finish writing its log first.
+     */
+    public function updateScript(array $versions): string
+    {
+        $script = Apt::preamble()."apt-get update -y\n";
+        foreach ($versions as $version) {
+            if (! self::validVersion($version)) {
+                throw new \InvalidArgumentException('Unknown PHP version: '.$version);
+            }
+            $script .= "echo '==> PHP {$version}'\n"
+                ."apt-get install -y --only-upgrade -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \$(dpkg-query -W -f='\${binary:Package}\\n' 'php{$version}-*' 2>/dev/null | tr '\\n' ' ') || true\n"
+                ."systemctl restart php{$version}-fpm || true\n"
+                ."/usr/bin/php{$version} -v | head -1\n";
+        }
+        $script .= "apt-get autoremove -y\n";
+
+        if (in_array(self::panelVersion(), $versions, true)) {
+            $script .= "echo '==> The panel runs on PHP ".self::panelVersion().": its services restart in a moment'\n"
+                ."setsid nohup bash -c 'sleep 3; systemctl restart gbxpanel-fpm; supervisorctl restart gbxpanel-worker:* >/dev/null 2>&1' >/dev/null 2>&1 </dev/null &\n";
+        }
+
+        return $script;
+    }
+
     public function installExtensionScript(string $version, string $extension): string
     {
         if (! preg_match('/^[a-z0-9_-]{2,30}$/', $extension)) {

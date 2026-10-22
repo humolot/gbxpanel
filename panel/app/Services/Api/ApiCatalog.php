@@ -79,7 +79,10 @@ class ApiCatalog
             self::e('GET', '/system/services', 'System@services', 'system:read', 'Services managed by the panel with their state', tag: 'System'),
             self::e('POST', '/system/services/{service}', 'System@serviceAction', 'system:write', 'Start, stop, restart, enable or disable a service', tag: 'System',
                 body: ['action' => 'start | stop | restart | reload | enable | disable']),
-            self::e('GET', '/system/php', 'System@php', 'system:read', 'PHP versions installed on the server', tag: 'System'),
+            self::e('GET', '/system/php', 'System@php', 'system:read', 'PHP versions installed on the server, with the release available for each', tag: 'System',
+                query: ['refresh' => 'Ask the repository for a new package list first (slower)']),
+            self::e('POST', '/system/php/update', 'System@phpUpdate', 'system:write', 'Install the newest packages of one or every PHP version', tag: 'System', task: true,
+                body: ['versions' => 'List of versions, or "all" for every installed version']),
             self::e('GET', '/system/metrics', 'System@metrics', 'system:read', 'History of CPU, memory, disk and network', tag: 'System',
                 query: ['range' => '1h, 6h, 24h, 7d (default 24h)']),
 
