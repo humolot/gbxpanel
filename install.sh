@@ -414,7 +414,7 @@ Defaults:${GBX_USER} !syslog
 ${GBX_USER} ALL=(root) NOPASSWD: ALL
 EOF
 chmod 440 /etc/sudoers.d/gbxpanel
-if ! visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1; then
+if sudo --version 2>/dev/null | grep -qi 'sudo-rs' || ! visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1; then
     # sudo-rs (default sudo on Ubuntu 25.10+) accepts fewer Defaults options: keep only the rule
     printf '# GBX Panel runs system administration commands as root.\n%s ALL=(root) NOPASSWD: ALL\n' "$GBX_USER" >/etc/sudoers.d/gbxpanel
     chmod 440 /etc/sudoers.d/gbxpanel
