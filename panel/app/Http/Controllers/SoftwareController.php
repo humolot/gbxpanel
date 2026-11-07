@@ -43,8 +43,8 @@ class SoftwareController extends Controller
     public function uninstall(Request $request)
     {
         $data = $request->validate(['key' => ['required', 'string'], 'version' => ['nullable', 'string']]);
-        if ($data['key'] === 'php' && ($data['version'] ?? null) === '8.4') {
-            return $this->fail('PHP 8.4 runs GBX Panel itself and cannot be removed.');
+        if ($data['key'] === 'php' && ($data['version'] ?? null) === \App\Services\PhpManager::panelVersion()) {
+            return $this->fail('PHP '.$data['version'].' runs GBX Panel itself and cannot be removed.');
         }
 
         return $this->task($this->software->uninstall($data['key'], $data['version'] ?? null), 'Removal started');

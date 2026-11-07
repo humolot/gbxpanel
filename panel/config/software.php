@@ -12,9 +12,13 @@
 $aptPrelude = 'export DEBIAN_FRONTEND=noninteractive; ';
 
 $phpRepo = $aptPrelude.'
-if ! grep -rqs "ondrej/php\|packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/; then
-  . /etc/os-release
-  if [ "$ID" = "ubuntu" ]; then
+. /etc/os-release
+# ppa:ondrej/php only builds jammy and noble; newer Ubuntu releases use packages.sury.org like Debian
+USE_PPA=0
+[ "$ID" = "ubuntu" ] && case "$VERSION_CODENAME" in jammy|noble) USE_PPA=1 ;; esac
+[ "$USE_PPA" = 0 ] && rm -f /etc/apt/sources.list.d/ondrej-ubuntu-php-*.list /etc/apt/sources.list.d/ondrej-ubuntu-php-*.sources
+if ! grep -rqs "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/ && { [ "$USE_PPA" = 0 ] || ! grep -rqs "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/; }; then
+  if [ "$USE_PPA" = 1 ]; then
     apt-get install -y software-properties-common && LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
   else
     apt-get install -y lsb-release ca-certificates curl

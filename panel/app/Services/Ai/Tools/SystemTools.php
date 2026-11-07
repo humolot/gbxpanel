@@ -20,7 +20,7 @@ class SystemTools extends ToolGroup
         'ps', 'pgrep', 'top', 'vmstat', 'iostat', 'mpstat', 'lsof', 'ss', 'netstat', 'ip', 'ping', 'dig', 'nslookup', 'host', 'traceroute', 'curl', 'wget',
         'systemctl', 'journalctl', 'service', 'crontab', 'last', 'lastlog', 'who', 'w',
         'ls', 'stat', 'file', 'cat', 'head', 'tail', 'grep', 'egrep', 'zgrep', 'wc', 'sort', 'uniq', 'cut', 'awk', 'tr', 'find', 'tree', 'md5sum', 'sha256sum', 'zcat', 'column', 'jq',
-        'apache2ctl', 'apachectl', 'apache2', 'php', 'php7.4', 'php8.0', 'php8.1', 'php8.2', 'php8.3', 'php8.4', 'php8.5', 'php-fpm8.4', 'composer', 'node', 'npm', 'pm2', 'git',
+        'apache2ctl', 'apachectl', 'apache2', 'php', 'php7.4', 'php8.0', 'php8.1', 'php8.2', 'php8.3', 'php8.4', 'php8.5', 'php-fpm8.4', 'php-fpm8.5','composer', 'node', 'npm', 'pm2', 'git',
         'mysql', 'mysqladmin', 'mysqld', 'mariadb', 'redis-cli', 'docker', 'ufw', 'fail2ban-client', 'certbot', 'openssl', 'sshd', 'apt', 'apt-cache', 'dpkg', 'dpkg-query', 'supervisorctl', 'getent', 'which', 'whereis', 'dmesg',
     ];
 
@@ -49,6 +49,7 @@ class SystemTools extends ToolGroup
         'mysqld' => '/^(--version|-V|--verbose\s+--help)$/',
         'php' => '/^(-v|-m|-i|--ini|--version)$/',
         'php-fpm8.4' => '/^(-t|-v|-i|-m)$/',
+        'php-fpm8.5' => '/^(-t|-v|-i|-m)$/',
         'apache2ctl' => '/^(-S|-M|-t|-v|-V|configtest|status|-t\s+-D\s+DUMP_\w+)$/',
         'apachectl' => '/^(-S|-M|-t|-v|-V|configtest|status)$/',
         'apache2' => '/^(-v|-V|-M|-l|-L)$/',

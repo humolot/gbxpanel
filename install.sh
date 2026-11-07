@@ -2,7 +2,8 @@
 #
 #  GBX Panel installer
 #  -------------------------------------------------------------------------
-#  Supported: Ubuntu 22.04 / 24.04, Debian 12 / 13 (x86_64, aarch64)
+#  Supported: Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13 (x86_64, aarch64)
+#  The panel runs on PHP 8.4 (Ondřej Surý packages), or on PHP 8.5 from the Ubuntu archive on 26.04.
 #
 #  Quick install:
 #    wget -O install.sh https://raw.githubusercontent.com/humolot/gbxpanel/main/install.sh && sudo bash install.sh
@@ -137,9 +138,17 @@ banner
 OS_ID="${ID:-}"
 OS_VER="${VERSION_ID:-}"
 case "$OS_ID:$OS_VER" in
-    ubuntu:22.04|ubuntu:24.04|debian:12|debian:13) ;;
-    *) fail "unsupported system: ${PRETTY_NAME:-unknown}. Supported: Ubuntu 22.04/24.04, Debian 12/13." ;;
+    ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
+    *) fail "unsupported system: ${PRETTY_NAME:-unknown}. Supported: Ubuntu 22.04/24.04/26.04, Debian 12/13." ;;
 esac
+
+# PHP that runs the panel: Ubuntu 26.04 ships PHP 8.5 in its own archive, so no extra repository
+# is needed there; older releases get PHP 8.4 from Ondřej Surý (PPA on Ubuntu, sury.org on Debian).
+PHP_NATIVE=0
+if [ "$OS_ID:$OS_VER" = "ubuntu:26.04" ]; then
+    PHP_V="8.5"
+    PHP_NATIVE=1
+fi
 
 ARCH="$(uname -m)"
 case "$ARCH" in x86_64|aarch64) ;; *) fail "unsupported architecture: $ARCH" ;; esac
@@ -180,6 +189,13 @@ step "Updating package lists and installing base packages"
 export DEBIAN_FRONTEND=noninteractive
 # wait for automatic updates instead of failing with "Could not get lock /var/lib/dpkg/lock-frontend"
 printf 'DPkg::Lock::Timeout "900";\n' >/etc/apt/apt.conf.d/99gbx-lock-timeout 2>/dev/null || true
+# ppa:ondrej/php has no build for Ubuntu 26.04+; a leftover entry makes "apt-get update" fail
+if [ "$OS_ID" = "ubuntu" ]; then
+    case "${VERSION_CODENAME:-}" in
+        jammy|noble) ;;
+        *) rm -f /etc/apt/sources.list.d/ondrej-ubuntu-php-*.list /etc/apt/sources.list.d/ondrej-ubuntu-php-*.sources ;;
+    esac
+fi
 run apt-get update -y
 apt_install ca-certificates curl wget unzip zip tar git rsync gnupg lsb-release openssl sqlite3 acl python3 \
     cron supervisor ufw sudo software-properties-common apt-transport-https logrotate iproute2 procps
@@ -189,7 +205,9 @@ ok "base packages installed"
 
 # ------------------------------------------------------------------ 2. PHP
 step "Installing PHP ${PHP_V}"
-if ! grep -rqs "ondrej/php\|packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+if [ "$PHP_NATIVE" -eq 1 ]; then
+    info "using PHP ${PHP_V} from the ${PRETTY_NAME} archive"
+elif ! grep -rqs "ondrej/php\|packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/; then
     if [ "$OS_ID" = "ubuntu" ]; then
         LC_ALL=C.UTF-8 run add-apt-repository -y ppa:ondrej/php
     else
@@ -199,8 +217,10 @@ if ! grep -rqs "ondrej/php\|packages.sury.org/php" /etc/apt/sources.list /etc/ap
     run apt-get update -y
     info "PHP repository added"
 fi
-apt_install php${PHP_V}-fpm php${PHP_V}-cli php${PHP_V}-common php${PHP_V}-sqlite3 php${PHP_V}-mysql php${PHP_V}-curl \
-    php${PHP_V}-mbstring php${PHP_V}-xml php${PHP_V}-zip php${PHP_V}-bcmath php${PHP_V}-intl php${PHP_V}-gd php${PHP_V}-readline php${PHP_V}-opcache
+PHP_PKGS=(fpm cli common sqlite3 mysql curl mbstring xml zip bcmath intl gd readline)
+# OPcache is built into PHP 8.5 and has no separate package
+[ "$PHP_V" = "8.4" ] && PHP_PKGS+=(opcache)
+apt_install "${PHP_PKGS[@]/#/php${PHP_V}-}"
 update-alternatives --set php /usr/bin/php${PHP_V} >>"$LOG_FILE" 2>&1 || true
 systemctl enable php${PHP_V}-fpm >>"$LOG_FILE" 2>&1
 ok "$(php${PHP_V} -r 'echo "PHP ".PHP_VERSION;') installed"
@@ -355,6 +375,12 @@ fi
 sed -i "s#^APP_URL=.*#APP_URL=${SCHEME}://127.0.0.1:${PANEL_PORT}#" "$PANEL_DIR/.env"
 sed -i "s#^SESSION_SECURE_COOKIE=.*#SESSION_SECURE_COOKIE=$([ "$USE_SSL" -eq 1 ] && echo true || echo false)#" "$PANEL_DIR/.env"
 sed -i "s#^APP_TIMEZONE=.*#APP_TIMEZONE=$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)#" "$PANEL_DIR/.env"
+# PHP binary of the panel (read by the panel and by "gbx"); new websites default to the same version
+PHP_ENV=("GBX_PHP_CLI=/usr/bin/php${PHP_V}")
+[ "$REINSTALL" -eq 0 ] && PHP_ENV+=("GBX_DEFAULT_PHP=${PHP_V}")
+for kv in "${PHP_ENV[@]}"; do
+    if grep -qE "^${kv%%=*}=" "$PANEL_DIR/.env"; then sed -i "s#^${kv%%=*}=.*#${kv}#" "$PANEL_DIR/.env"; else echo "$kv" >>"$PANEL_DIR/.env"; fi
+done
 
 touch "$PANEL_DIR/database/database.sqlite"
 chown "$GBX_USER:$GBX_USER" "$PANEL_DIR/database/database.sqlite"
@@ -388,12 +414,17 @@ Defaults:${GBX_USER} !syslog
 ${GBX_USER} ALL=(root) NOPASSWD: ALL
 EOF
 chmod 440 /etc/sudoers.d/gbxpanel
-visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1 || { rm -f /etc/sudoers.d/gbxpanel; fail "invalid sudoers file"; }
+if ! visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1; then
+    # sudo-rs (default sudo on Ubuntu 25.10+) accepts fewer Defaults options: keep only the rule
+    printf '# GBX Panel runs system administration commands as root.\n%s ALL=(root) NOPASSWD: ALL\n' "$GBX_USER" >/etc/sudoers.d/gbxpanel
+    chmod 440 /etc/sudoers.d/gbxpanel
+    visudo -cf /etc/sudoers.d/gbxpanel >>"$LOG_FILE" 2>&1 || { rm -f /etc/sudoers.d/gbxpanel; fail "invalid sudoers file"; }
+fi
 ok "sudo rules installed for ${GBX_USER}"
 
 # ------------------------------------------------------------------ 9. PHP-FPM
 # The panel gets its own PHP-FPM master (gbxpanel-fpm.service). The distribution
-# php8.4-fpm.service uses ProtectSystem=full, which makes /usr and /etc read-only
+# php${PHP_V}-fpm.service uses ProtectSystem=full, which makes /usr and /etc read-only
 # for PHP and for every command it starts.
 step "Configuring the panel PHP-FPM service"
 "$GBX_ROOT/bin/gbx" fpm-service >>"$LOG_FILE" 2>&1 || fail "could not start gbxpanel-fpm (see ${LOG_FILE})"

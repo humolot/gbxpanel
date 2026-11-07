@@ -31,11 +31,16 @@ GBX_ROOT="/usr/local/gbxpanel"
 PANEL_DIR="$GBX_ROOT/panel"
 ENV_FILE="$PANEL_DIR/.env"
 GBX_USER="gbxpanel"
-PHP_BIN="/usr/bin/php8.4"
+# PHP of the panel: GBX_PHP_CLI in .env (8.4, or 8.5 on Ubuntu 26.04); older installs did not set it
+PHP_BIN="$(grep -E '^GBX_PHP_CLI=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+if [ ! -x "${PHP_BIN:-}" ]; then
+    PHP_BIN="/usr/bin/php8.4"
+    for v in 8.4 8.5; do [ -x "/usr/bin/php$v" ] && { PHP_BIN="/usr/bin/php$v"; break; }; done
+fi
 VHOST="/etc/apache2/sites-available/000-gbxpanel.conf"
 SELF_CERT="$GBX_ROOT/ssl/panel.crt"
 SELF_KEY="$GBX_ROOT/ssl/panel.key"
-FPM_BIN="/usr/sbin/php-fpm8.4"
+FPM_BIN="/usr/sbin/php-fpm${PHP_BIN##*/php}"
 FPM_DIR="$GBX_ROOT/fpm"
 FPM_SOCK="/run/gbxpanel/php-fpm.sock"
 FPM_UNIT="/etc/systemd/system/gbxpanel-fpm.service"
@@ -172,6 +177,8 @@ php_admin_flag[log_errors] = on
 php_admin_value[upload_tmp_dir] = ${GBX_ROOT}/tmp
 php_admin_value[sys_temp_dir] = ${GBX_ROOT}/tmp
 php_admin_value[session.save_path] = ${GBX_ROOT}/tmp
+; the panel must keep every function it needs, whatever php.ini disables for the websites
+php_admin_value[disable_functions] =
 EOF
 
     cat >"$FPM_UNIT" <<EOF

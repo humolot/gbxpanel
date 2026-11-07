@@ -290,7 +290,7 @@ class SystemStats
     public function processes(int $limit = 200): array
     {
         if (Shell::simulating()) {
-            $names = ['apache2', 'php-fpm8.4', 'mysqld', 'dockerd', 'supervisord', 'sshd', 'systemd', 'cron', 'redis-server', 'node'];
+            $names = ['apache2', 'php-fpm8.4', 'php-fpm8.5', 'mysqld', 'dockerd', 'supervisord', 'sshd', 'systemd', 'cron', 'redis-server', 'node'];
             $rows = [];
             foreach (range(1, 40) as $i) {
                 $n = $names[$i % count($names)];
